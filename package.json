@@ -9,22 +9,27 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@uiw/react-markdown-preview": "^5.1.5",
     "antd": "^5.12.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/node": "^20.10.0",
     "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.3.0",
-    "vite": "^5.0.0",
+    "concurrently": "^8.2.2",
     "tsx": "^4.6.0",
-    "concurrently": "^8.2.2"
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
   }
 }

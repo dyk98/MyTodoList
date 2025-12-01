@@ -1,3 +1,5 @@
 export { TodoItem } from './TodoItem'
 export { TodoPool } from './TodoPool'
 export { WeekBlock } from './WeekBlock'
+export { DocViewer } from './DocViewer'
+export { AiChatBubble } from './AiChatBubble'

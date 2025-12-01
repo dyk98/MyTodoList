@@ -1,17 +1,5 @@
 import type { TodoItem, ProjectGroup, WeekBlock, ParsedTodo } from '@/types'
 
-// 项目列表（用于识别待办池中的项目）
-const PROJECTS = [
-  'AgentDriver',
-  'AgentRL',
-  'build-server',
-  '多端',
-  '工具',
-  'zhiwei',
-  '教育场景',
-  '其他',
-]
-
 // 解析单行任务
 function parseTodoLine(line: string, lineIndex: number): TodoItem | null {
   const match = line.match(/^(\s*)- \[([ x])\]\s*(.*)$/)
@@ -73,18 +61,14 @@ export function parseTodoMd(content: string): ParsedTodo {
     // 检测项目标题（### ProjectName）
     if (currentSection === 'pool' && line.startsWith('### ')) {
       // 保存上一个项目
-      if (currentProject && tempItems.length > 0) {
+      if (currentProject) {
         currentProject.items = buildTaskTree(tempItems)
         pool.push(currentProject)
         tempItems = []
       }
 
       const projectName = line.slice(4).trim()
-      if (PROJECTS.includes(projectName)) {
-        currentProject = { name: projectName, items: [] }
-      } else {
-        currentProject = null
-      }
+      currentProject = { name: projectName, items: [] }
       continue
     }
 
