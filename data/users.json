@@ -1,0 +1,10 @@
+{
+  "users": [
+    {
+      "email": "yuankaidong@tencent.com",
+      "passwordHash": "$2b$10$VC08CEwG50EHYz.rgxWIN.XhI3x28F.UQzy866CAttOiTr1tJfFs2",
+      "createdAt": "2025-12-02T06:52:40.207Z",
+      "isAdmin": true
+    }
+  ]
+}

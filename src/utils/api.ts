@@ -2,9 +2,130 @@ import type { ApiResponse } from '@/types'
 
 const BASE_URL = '/api'
 
+// Token 存储键名
+const TOKEN_KEY = 'auth_token'
+
+// 获取存储的 token
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+// 存储 token
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
+// 清除 token
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY)
+}
+
+// 构建带认证的请求头
+function getAuthHeaders(): Record<string, string> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
+
+// ========== 认证相关 API ==========
+
+export interface User {
+  email: string
+  isAdmin: boolean
+}
+
+// 注册
+export async function register(email: string, password: string, inviteCode: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, inviteCode }),
+  })
+  const data = await res.json() as { success: boolean; token?: string; error?: string }
+  if (!data.success || !data.token) {
+    throw new Error(data.error || '注册失败')
+  }
+  setToken(data.token)
+}
+
+// 登录
+export async function login(email: string, password: string): Promise<{ isAdmin: boolean }> {
+  const res = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  const data = await res.json() as { success: boolean; token?: string; isAdmin?: boolean; error?: string }
+  if (!data.success || !data.token) {
+    throw new Error(data.error || '登录失败')
+  }
+  setToken(data.token)
+  return { isAdmin: data.isAdmin || false }
+}
+
+// 登出
+export function logout(): void {
+  clearToken()
+}
+
+// 获取当前用户信息
+export async function getCurrentUser(): Promise<User | null> {
+  const token = getToken()
+  if (!token) return null
+
+  try {
+    const res = await fetch(`${BASE_URL}/auth/me`, {
+      headers: getAuthHeaders(),
+    })
+    const data = await res.json() as { success: boolean; user?: User; error?: string }
+    if (!data.success || !data.user) {
+      clearToken()
+      return null
+    }
+    return data.user
+  } catch {
+    clearToken()
+    return null
+  }
+}
+
+// 修改密码
+export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ oldPassword, newPassword }),
+  })
+  const data = await res.json() as { success: boolean; error?: string }
+  if (!data.success) {
+    throw new Error(data.error || '修改密码失败')
+  }
+}
+
+// 生成邀请码（仅管理员）
+export async function generateInvite(targetEmail: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}/auth/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ targetEmail }),
+  })
+  const data = await res.json() as { success: boolean; code?: string; error?: string }
+  if (!data.success || !data.code) {
+    throw new Error(data.error || '生成邀请码失败')
+  }
+  return data.code
+}
+
+// ========== TODO 相关 API ==========
+
 // 获取可用年份列表
 export async function fetchYears(): Promise<number[]> {
-  const res = await fetch(`${BASE_URL}/years`)
+  const res = await fetch(`${BASE_URL}/years`, {
+    headers: getAuthHeaders(),
+  })
   const data = await res.json() as { success: boolean; years?: number[]; error?: string }
   if (!data.success) {
     throw new Error(data.error || 'Failed to fetch years')
@@ -13,21 +134,23 @@ export async function fetchYears(): Promise<number[]> {
 }
 
 // 获取 TODO 内容
-export async function fetchTodo(year?: number): Promise<{ content: string; year: number }> {
+export async function fetchTodo(year?: number): Promise<{ content: string; year: number; isDemo?: boolean }> {
   const url = year ? `${BASE_URL}/todo?year=${year}` : `${BASE_URL}/todo`
-  const res = await fetch(url)
-  const data: ApiResponse & { year?: number } = await res.json()
+  const res = await fetch(url, {
+    headers: getAuthHeaders(),
+  })
+  const data: ApiResponse & { year?: number; isDemo?: boolean } = await res.json()
   if (!data.success || !data.content) {
     throw new Error(data.error || 'Failed to fetch todo')
   }
-  return { content: data.content, year: data.year || new Date().getFullYear() }
+  return { content: data.content, year: data.year || new Date().getFullYear(), isDemo: data.isDemo }
 }
 
 // 更新整个 TODO 文件
 export async function updateTodo(content: string, year?: number): Promise<void> {
   const res = await fetch(`${BASE_URL}/todo`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ content, year }),
   })
   const data: ApiResponse = await res.json()
@@ -40,12 +163,40 @@ export async function updateTodo(content: string, year?: number): Promise<void> 
 export async function toggleTodo(lineIndex: number, year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/todo/toggle`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ lineIndex, year }),
   })
   const data: ApiResponse = await res.json()
   if (!data.success || !data.newContent) {
     throw new Error(data.error || 'Failed to toggle todo')
+  }
+  return data.newContent
+}
+
+// 删除任务
+export async function deleteTodo(lineIndex: number, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/delete`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ lineIndex, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to delete todo')
+  }
+  return data.newContent
+}
+
+// 编辑任务
+export async function editTodo(lineIndex: number, newContent: string, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/edit`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ lineIndex, newContent, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to edit todo')
   }
   return data.newContent
 }
@@ -59,7 +210,7 @@ export async function addTodo(
 ): Promise<string> {
   const res = await fetch(`${BASE_URL}/todo/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ task, project, year, weekLineIndex }),
   })
   const data: ApiResponse = await res.json()
@@ -72,7 +223,9 @@ export async function addTodo(
 // 获取周列表
 export async function fetchWeeks(year?: number): Promise<{ title: string; lineIndex: number }[]> {
   const url = year ? `${BASE_URL}/weeks?year=${year}` : `${BASE_URL}/weeks`
-  const res = await fetch(url)
+  const res = await fetch(url, {
+    headers: getAuthHeaders(),
+  })
   const data = await res.json() as { success: boolean; weeks?: { title: string; lineIndex: number }[]; error?: string }
   if (!data.success) {
     throw new Error(data.error || 'Failed to fetch weeks')
@@ -84,7 +237,7 @@ export async function fetchWeeks(year?: number): Promise<{ title: string; lineIn
 export async function addProject(name: string, year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/project/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ name, year }),
   })
   const data: ApiResponse = await res.json()
@@ -98,7 +251,7 @@ export async function addProject(name: string, year?: number): Promise<string> {
 export async function reorderTodo(fromLineIndex: number, toLineIndex: number, year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/todo/reorder`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ fromLineIndex, toLineIndex, year }),
   })
   const data: ApiResponse = await res.json()
@@ -112,7 +265,7 @@ export async function reorderTodo(fromLineIndex: number, toLineIndex: number, ye
 export async function weekSettle(year?: number): Promise<{ newContent: string; settledCount: number; weekTitle: string }> {
   const res = await fetch(`${BASE_URL}/todo/week-settle`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ year }),
   })
   const data = await res.json() as { success: boolean; newContent?: string; settledCount?: number; weekTitle?: string; error?: string }
@@ -124,7 +277,9 @@ export async function weekSettle(year?: number): Promise<{ newContent: string; s
 
 // 获取文档列表
 export async function fetchDocs(): Promise<{ name: string; filename: string }[]> {
-  const res = await fetch(`${BASE_URL}/docs`)
+  const res = await fetch(`${BASE_URL}/docs`, {
+    headers: getAuthHeaders(),
+  })
   const data = await res.json() as { success: boolean; docs?: { name: string; filename: string }[]; error?: string }
   if (!data.success) {
     throw new Error(data.error || 'Failed to fetch docs')
@@ -134,7 +289,9 @@ export async function fetchDocs(): Promise<{ name: string; filename: string }[]>
 
 // 获取文档内容
 export async function fetchDocContent(filename: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}/docs/${encodeURIComponent(filename)}`)
+  const res = await fetch(`${BASE_URL}/docs/${encodeURIComponent(filename)}`, {
+    headers: getAuthHeaders(),
+  })
   const data = await res.json() as { success: boolean; content?: string; error?: string }
   if (!data.success || !data.content) {
     throw new Error(data.error || 'Failed to fetch doc content')
@@ -148,6 +305,7 @@ export async function uploadDoc(file: File): Promise<{ name: string; filename: s
   formData.append('file', file)
   const res = await fetch(`${BASE_URL}/docs/upload`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: formData,
   })
   const data = await res.json() as { success: boolean; name?: string; filename?: string; error?: string }
@@ -161,7 +319,7 @@ export async function uploadDoc(file: File): Promise<{ name: string; filename: s
 export async function addWeek(weekTitle: string, year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/week/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ weekTitle, year }),
   })
   const data = await res.json() as { success: boolean; newContent?: string; error?: string }
@@ -180,7 +338,7 @@ export interface ChatMessage {
 export async function aiChat(message: string, history: ChatMessage[] = [], year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/ai/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ message, history, year }),
   })
   const data = await res.json() as { success: boolean; reply?: string; error?: string }

@@ -1,5 +1,6 @@
-import { Checkbox, Typography } from 'antd'
-import { HolderOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Checkbox, Typography, Button, Input, Popconfirm, Space } from 'antd'
+import { HolderOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { TodoItem as TodoItemType } from '@/types'
@@ -9,9 +10,15 @@ const { Text } = Typography
 interface Props {
   item: TodoItemType
   onToggle: (lineIndex: number) => void
+  onEdit?: (lineIndex: number, newContent: string) => Promise<void>
+  onDelete?: (lineIndex: number) => Promise<void>
+  readOnly?: boolean
 }
 
-export function TodoItem({ item, onToggle }: Props) {
+export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }: Props) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(item.content)
+
   const {
     attributes,
     listeners,
@@ -27,6 +34,24 @@ export function TodoItem({ item, onToggle }: Props) {
     opacity: isDragging ? 0.5 : 1,
   }
 
+  const handleSaveEdit = async () => {
+    if (editValue.trim() && onEdit) {
+      await onEdit(item.lineIndex, editValue.trim())
+      setEditing(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditValue(item.content)
+    setEditing(false)
+  }
+
+  const handleDelete = async () => {
+    if (onDelete) {
+      await onDelete(item.lineIndex)
+    }
+  }
+
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <div
@@ -36,34 +61,91 @@ export function TodoItem({ item, onToggle }: Props) {
           gap: 8,
           padding: '4px 0',
         }}
+        className="todo-item-row"
       >
-        <HolderOutlined
-          {...listeners}
-          style={{
-            cursor: 'grab',
-            color: '#999',
-            marginTop: 4,
-          }}
-        />
+        {!readOnly && (
+          <HolderOutlined
+            {...listeners}
+            style={{
+              cursor: 'grab',
+              color: '#999',
+              marginTop: 4,
+            }}
+          />
+        )}
         <Checkbox
           checked={item.completed}
           onChange={() => onToggle(item.lineIndex)}
+          disabled={readOnly || editing}
         />
-        <Text
-          delete={item.completed}
-          type={item.completed ? 'secondary' : undefined}
-          style={{ flex: 1, lineHeight: '22px' }}
-        >
-          {item.content}
-        </Text>
+        {editing ? (
+          <Space.Compact style={{ flex: 1 }}>
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onPressEnter={handleSaveEdit}
+              onKeyDown={(e) => e.key === 'Escape' && handleCancelEdit()}
+              autoFocus
+              size="small"
+            />
+            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={handleSaveEdit} />
+            <Button size="small" icon={<CloseOutlined />} onClick={handleCancelEdit} />
+          </Space.Compact>
+        ) : (
+          <>
+            <Text
+              delete={item.completed}
+              type={item.completed ? 'secondary' : undefined}
+              style={{ flex: 1, lineHeight: '22px' }}
+            >
+              {item.content}
+            </Text>
+            {!readOnly && (
+              <Space size={4} className="todo-item-actions" style={{ opacity: 0, transition: 'opacity 0.2s' }}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => setEditing(true)}
+                />
+                <Popconfirm
+                  title="确定删除此任务？"
+                  description={item.children.length > 0 ? '子任务也会一并删除' : undefined}
+                  onConfirm={handleDelete}
+                  okText="删除"
+                  cancelText="取消"
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                  />
+                </Popconfirm>
+              </Space>
+            )}
+          </>
+        )}
       </div>
       {item.children.length > 0 && (
         <div style={{ marginLeft: 24 }}>
           {item.children.map((child) => (
-            <TodoItem key={child.lineIndex} item={child} onToggle={onToggle} />
+            <TodoItem
+              key={child.lineIndex}
+              item={child}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              readOnly={readOnly}
+            />
           ))}
         </div>
       )}
+      <style>{`
+        .todo-item-row:hover .todo-item-actions {
+          opacity: 1 !important;
+        }
+      `}</style>
     </div>
   )
 }

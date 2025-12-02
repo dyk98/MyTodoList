@@ -4,22 +4,41 @@ import fs from 'fs/promises'
 import path from 'path'
 import { execSync } from 'child_process'
 import multer from 'multer'
+import {
+  register,
+  login,
+  changePassword,
+  generateInviteCode,
+  authMiddleware,
+  optionalAuthMiddleware,
+  getUserDataDir,
+  getUserDocsDir,
+  DEMO_DATA_DIR,
+  DEMO_DOCS_DIR,
+  type AuthRequest,
+} from './auth.js'
 
 const app = express()
 const PORT = 3001
 
-// TODO 文件目录
-const DATA_DIR = path.resolve(import.meta.dirname, '../data')
-// 文档目录
-const DOCS_DIR = path.resolve(import.meta.dirname, '../otherDocs')
-// CLAUDE.md 路径
-const CLAUDE_MD_PATH = path.resolve(import.meta.dirname, '../CLAUDE.md')
 // 项目根目录
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
 
-// 获取指定年份的文件路径
-function getTodoFilePath(year: number | string): string {
-  return path.join(DATA_DIR, `${year}-todo.md`)
+// 获取用户的 TODO 文件路径
+function getTodoFilePath(userEmail: string | null, year: number | string): string {
+  if (!userEmail) {
+    // 未登录用户使用 demo 数据
+    return path.join(DEMO_DATA_DIR, `${year}-todo.md`)
+  }
+  return path.join(getUserDataDir(userEmail), `${year}-todo.md`)
+}
+
+// 获取用户的文档目录
+function getDocsDir(userEmail: string | null): string {
+  if (!userEmail) {
+    return DEMO_DOCS_DIR
+  }
+  return getUserDocsDir(userEmail)
 }
 
 // ========== 统一的检测辅助函数 ==========
@@ -77,10 +96,14 @@ function handleError(res: express.Response, error: unknown, context: string) {
 app.use(cors())
 app.use(express.json())
 
-// 配置 multer 用于文件上传
+// 配置 multer 用于文件上传（动态目录，在路由中处理）
 const upload = multer({
   storage: multer.diskStorage({
-    destination: DOCS_DIR,
+    destination: (req, _file, cb) => {
+      const authReq = req as AuthRequest
+      const docsDir = getDocsDir(authReq.user?.email || null)
+      cb(null, docsDir)
+    },
     filename: (_req, file, cb) => {
       // 保留原文件名，使用 UTF-8 解码
       const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
@@ -101,10 +124,99 @@ const upload = multer({
   },
 })
 
-// 获取可用年份列表
-app.get('/api/years', async (_req, res) => {
+// ========== 认证相关 API ==========
+
+// 注册
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const files = await fs.readdir(DATA_DIR)
+    const { email, password, inviteCode } = req.body
+    if (!email || !password || !inviteCode) {
+      return res.status(400).json({ success: false, error: '邮箱、密码和邀请码都是必填项' })
+    }
+    const result = await register(email, password, inviteCode)
+    if (result.success) {
+      res.json({ success: true, token: result.token })
+    } else {
+      res.status(400).json({ success: false, error: result.error })
+    }
+  } catch (error) {
+    handleError(res, error, 'POST /api/auth/register')
+  }
+})
+
+// 登录
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: '邮箱和密码都是必填项' })
+    }
+    const result = await login(email, password)
+    if (result.success) {
+      res.json({ success: true, token: result.token, isAdmin: result.isAdmin })
+    } else {
+      res.status(400).json({ success: false, error: result.error })
+    }
+  } catch (error) {
+    handleError(res, error, 'POST /api/auth/login')
+  }
+})
+
+// 修改密码（需要登录）
+app.post('/api/auth/change-password', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: '旧密码和新密码都是必填项' })
+    }
+    const result = await changePassword(req.user!.email, oldPassword, newPassword)
+    if (result.success) {
+      res.json({ success: true })
+    } else {
+      res.status(400).json({ success: false, error: result.error })
+    }
+  } catch (error) {
+    handleError(res, error, 'POST /api/auth/change-password')
+  }
+})
+
+// 获取当前用户信息（需要登录）
+app.get('/api/auth/me', authMiddleware, (req: AuthRequest, res) => {
+  res.json({
+    success: true,
+    user: {
+      email: req.user!.email,
+      isAdmin: req.user!.isAdmin,
+    },
+  })
+})
+
+// 生成邀请码（仅管理员）
+app.post('/api/auth/invite', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { targetEmail } = req.body
+    if (!targetEmail) {
+      return res.status(400).json({ success: false, error: '目标邮箱是必填项' })
+    }
+    const result = await generateInviteCode(req.user!.email, targetEmail)
+    if (result.success) {
+      res.json({ success: true, code: result.code })
+    } else {
+      res.status(400).json({ success: false, error: result.error })
+    }
+  } catch (error) {
+    handleError(res, error, 'POST /api/auth/invite')
+  }
+})
+
+// ========== TODO 相关 API（支持用户隔离）==========
+
+// 获取可用年份列表
+app.get('/api/years', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userEmail = req.user?.email || null
+    const dataDir = userEmail ? getUserDataDir(userEmail) : DEMO_DATA_DIR
+    const files = await fs.readdir(dataDir)
     const years = files
       .filter(f => /^\d{4}-todo\.md$/.test(f))
       .map(f => parseInt(f.slice(0, 4)))
@@ -116,26 +228,27 @@ app.get('/api/years', async (_req, res) => {
 })
 
 // 获取 TODO 文件内容（支持年份参数）
-app.get('/api/todo', async (req, res) => {
+app.get('/api/todo', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
+    const userEmail = req.user?.email || null
     const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
-    const filePath = getTodoFilePath(year)
+    const filePath = getTodoFilePath(userEmail, year)
     const content = await fs.readFile(filePath, 'utf-8')
-    res.json({ success: true, content, year: Number(year) })
+    res.json({ success: true, content, year: Number(year), isDemo: !userEmail })
   } catch (error) {
     handleError(res, error, 'GET /api/todo')
   }
 })
 
-// 更新 TODO 文件内容
-app.put('/api/todo', async (req, res) => {
+// 更新 TODO 文件内容（需要登录）
+app.put('/api/todo', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { content, year } = req.body
     const targetYear = year || new Date().getFullYear()
     if (typeof content !== 'string') {
       return res.status(400).json({ success: false, error: 'content is required' })
     }
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     await fs.writeFile(filePath, content, 'utf-8')
     res.json({ success: true })
   } catch (error) {
@@ -143,8 +256,8 @@ app.put('/api/todo', async (req, res) => {
   }
 })
 
-// 切换任务完成状态
-app.patch('/api/todo/toggle', async (req, res) => {
+// 切换任务完成状态（需要登录）
+app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { lineIndex, year } = req.body
     const targetYear = year || new Date().getFullYear()
@@ -152,7 +265,7 @@ app.patch('/api/todo/toggle', async (req, res) => {
       return res.status(400).json({ success: false, error: 'lineIndex is required' })
     }
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -177,10 +290,11 @@ app.patch('/api/todo/toggle', async (req, res) => {
 })
 
 // 获取周列表（用于新增任务时选择时间段）
-app.get('/api/weeks', async (req, res) => {
+app.get('/api/weeks', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
+    const userEmail = req.user?.email || null
     const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
-    const filePath = getTodoFilePath(year)
+    const filePath = getTodoFilePath(userEmail, year)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -201,8 +315,8 @@ app.get('/api/weeks', async (req, res) => {
   }
 })
 
-// 新增任务
-app.post('/api/todo/add', async (req, res) => {
+// 新增任务（需要登录）
+app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { task, project, year, weekLineIndex } = req.body
     const targetYear = year || new Date().getFullYear()
@@ -210,7 +324,7 @@ app.post('/api/todo/add', async (req, res) => {
       return res.status(400).json({ success: false, error: 'task and project are required' })
     }
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -286,8 +400,8 @@ app.post('/api/todo/add', async (req, res) => {
   }
 })
 
-// 新增分类（项目）
-app.post('/api/project/add', async (req, res) => {
+// 新增分类（项目）（需要登录）
+app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { name, year } = req.body
     const targetYear = year || new Date().getFullYear()
@@ -295,7 +409,7 @@ app.post('/api/project/add', async (req, res) => {
       return res.status(400).json({ success: false, error: 'name is required' })
     }
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -337,8 +451,98 @@ app.post('/api/project/add', async (req, res) => {
   }
 })
 
-// 任务排序：移动任务位置
-app.post('/api/todo/reorder', async (req, res) => {
+// 删除任务（需要登录）
+app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { lineIndex, year } = req.body
+    const targetYear = year || new Date().getFullYear()
+
+    if (typeof lineIndex !== 'number') {
+      return res.status(400).json({ success: false, error: 'lineIndex is required' })
+    }
+
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
+    const content = await fs.readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+      return res.status(400).json({ success: false, error: 'Invalid lineIndex' })
+    }
+
+    const line = lines[lineIndex]
+    if (!isTaskLine(line)) {
+      return res.status(400).json({ success: false, error: 'Line is not a todo item' })
+    }
+
+    // 收集要删除的行（任务及其子任务）
+    const baseIndent = line.search(/\S/)
+    const linesToDelete: number[] = [lineIndex]
+
+    for (let i = lineIndex + 1; i < lines.length; i++) {
+      const nextLine = lines[i]
+      if (nextLine.trim() === '' || isBlockBoundary(nextLine)) {
+        break
+      }
+      const nextIndent = nextLine.search(/\S/)
+      if (nextIndent > baseIndent) {
+        linesToDelete.push(i)
+      } else {
+        break
+      }
+    }
+
+    // 从后往前删除，避免索引偏移
+    for (let i = linesToDelete.length - 1; i >= 0; i--) {
+      lines.splice(linesToDelete[i], 1)
+    }
+
+    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    res.json({ success: true, newContent: lines.join('\n') })
+  } catch (error) {
+    handleError(res, error, 'DELETE /api/todo/delete')
+  }
+})
+
+// 编辑任务内容（需要登录）
+app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { lineIndex, newContent, year } = req.body
+    const targetYear = year || new Date().getFullYear()
+
+    if (typeof lineIndex !== 'number' || typeof newContent !== 'string') {
+      return res.status(400).json({ success: false, error: 'lineIndex and newContent are required' })
+    }
+
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
+    const content = await fs.readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    if (lineIndex < 0 || lineIndex >= lines.length) {
+      return res.status(400).json({ success: false, error: 'Invalid lineIndex' })
+    }
+
+    const line = lines[lineIndex]
+    if (!isTaskLine(line)) {
+      return res.status(400).json({ success: false, error: 'Line is not a todo item' })
+    }
+
+    // 保留原有的缩进和复选框状态
+    const match = line.match(/^(\s*- \[[ x]\] )/)
+    if (!match) {
+      return res.status(400).json({ success: false, error: 'Invalid task format' })
+    }
+
+    lines[lineIndex] = match[1] + newContent.trim()
+
+    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    res.json({ success: true, newContent: lines.join('\n') })
+  } catch (error) {
+    handleError(res, error, 'PATCH /api/todo/edit')
+  }
+})
+
+// 任务排序：移动任务位置（需要登录）
+app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year, fromLineIndex, toLineIndex } = req.body
     const targetYear = year || new Date().getFullYear()
@@ -347,7 +551,7 @@ app.post('/api/todo/reorder', async (req, res) => {
       return res.status(400).json({ success: false, error: 'fromLineIndex and toLineIndex are required' })
     }
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -422,13 +626,13 @@ function parseWeekTitle(title: string): Date | null {
   return new Date(year, parseInt(startMonth) - 1, parseInt(startDay))
 }
 
-// 周结算：将待办池中已完成的任务移动到当前周区块
-app.post('/api/todo/week-settle', async (req, res) => {
+// 周结算：将待办池中已完成的任务移动到当前周区块（需要登录）
+app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year } = req.body
     const targetYear = year || new Date().getFullYear()
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     let lines = content.split('\n')
 
@@ -688,31 +892,35 @@ app.post('/api/todo/week-settle', async (req, res) => {
   }
 })
 
-// 获取文档列表
-app.get('/api/docs', async (_req, res) => {
+// 获取文档列表（支持用户隔离）
+app.get('/api/docs', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
-    const files = await fs.readdir(DOCS_DIR)
+    const userEmail = req.user?.email || null
+    const docsDir = getDocsDir(userEmail)
+    const files = await fs.readdir(docsDir)
     const docs = files
       .filter(f => f.endsWith('.md'))
       .map(f => ({
         name: f.replace('.md', ''),
         filename: f,
       }))
-    res.json({ success: true, docs })
+    res.json({ success: true, docs, isDemo: !userEmail })
   } catch (error) {
     handleError(res, error, 'GET /api/docs')
   }
 })
 
-// 获取文档内容
-app.get('/api/docs/:filename', async (req, res) => {
+// 获取文档内容（支持用户隔离）
+app.get('/api/docs/:filename', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { filename } = req.params
     // 安全检查：防止路径遍历
     if (filename.includes('..') || filename.includes('/')) {
       return res.status(400).json({ success: false, error: 'Invalid filename' })
     }
-    const filePath = path.join(DOCS_DIR, filename)
+    const userEmail = req.user?.email || null
+    const docsDir = getDocsDir(userEmail)
+    const filePath = path.join(docsDir, filename)
     const content = await fs.readFile(filePath, 'utf-8')
     res.json({ success: true, content })
   } catch (error) {
@@ -720,8 +928,8 @@ app.get('/api/docs/:filename', async (req, res) => {
   }
 })
 
-// 上传文档
-app.post('/api/docs/upload', upload.single('file'), (req, res) => {
+// 上传文档（需要登录）
+app.post('/api/docs/upload', authMiddleware, upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: '没有上传文件' })
@@ -737,8 +945,8 @@ app.post('/api/docs/upload', upload.single('file'), (req, res) => {
   }
 })
 
-// 新增周区块
-app.post('/api/week/add', async (req, res) => {
+// 新增周区块（需要登录）
+app.post('/api/week/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year, weekTitle } = req.body
     const targetYear = year || new Date().getFullYear()
@@ -747,7 +955,7 @@ app.post('/api/week/add', async (req, res) => {
       return res.status(400).json({ success: false, error: 'weekTitle is required' })
     }
 
-    const filePath = getTodoFilePath(targetYear)
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
     const content = await fs.readFile(filePath, 'utf-8')
     const lines = content.split('\n')
 
@@ -783,14 +991,18 @@ app.post('/api/week/add', async (req, res) => {
   }
 })
 
-// AI 聊天接口 - 使用 claude CLI
-app.post('/api/ai/chat', async (req, res) => {
+// AI 聊天接口 - 使用 claude CLI（支持用户隔离工作空间）
+app.post('/api/ai/chat', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const { message, history = [] } = req.body
 
     if (!message) {
       return res.status(400).json({ success: false, error: 'message is required' })
     }
+
+    // 确定工作目录：登录用户使用个人目录，未登录使用 demo 目录
+    const userEmail = req.user?.email || null
+    const workDir = userEmail ? getUserDataDir(userEmail) : DEMO_DATA_DIR
 
     // 构建包含历史的 prompt
     // 只取最近 5 条对话（10 条消息）
@@ -815,10 +1027,10 @@ app.post('/api/ai/chat', async (req, res) => {
     const escapedMessage = fullPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$')
     const command = `claude -p "${escapedMessage}" --allowedTools "Read,Edit" --permission-mode acceptEdits`
 
-    console.log('Executing claude command with history, message length:', fullPrompt.length)
+    console.log('Executing claude command with history, message length:', fullPrompt.length, 'workDir:', workDir)
 
     const result = execSync(command, {
-      cwd: PROJECT_ROOT,
+      cwd: workDir,
       encoding: 'utf-8',
       timeout: 120000, // 2 分钟超时
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
@@ -829,6 +1041,9 @@ app.post('/api/ai/chat', async (req, res) => {
     handleError(res, error, 'POST /api/ai/chat')
   }
 })
+
+// 数据目录（用于日志输出）
+const DATA_DIR = path.resolve(import.meta.dirname, '../data')
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`)

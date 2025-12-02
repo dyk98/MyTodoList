@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input } from 'antd'
-import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
-import { TodoPool, WeekBlock, DocViewer, AiChatBubble } from '@/components'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc } from '@/utils/api'
+import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
+import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons'
+import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
+import { fetchTodo, fetchYears, toggleTodo, addTodo, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
+import { useAuth } from '@/contexts/AuthContext'
 import type { ParsedTodo } from '@/types'
 
 const { Header, Content } = Layout
 const { Title } = Typography
 
 function App() {
+  const { user, loading: authLoading, isDemo, logout } = useAuth()
   const [data, setData] = useState<ParsedTodo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -20,6 +22,10 @@ function App() {
   const [docs, setDocs] = useState<{ name: string; filename: string }[]>([])
   const [docViewerOpen, setDocViewerOpen] = useState(false)
   const [currentDoc, setCurrentDoc] = useState<{ name: string; filename: string } | null>(null)
+
+  // 认证相关状态
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
 
   // 加载年份列表和文档列表
   useEffect(() => {
@@ -77,6 +83,28 @@ function App() {
     const newContent = await reorderTodo(fromLineIndex, toLineIndex, currentYear)
     const parsed = parseTodoMd(newContent)
     setData(parsed)
+  }
+
+  const handleEdit = async (lineIndex: number, newContent: string) => {
+    try {
+      const updatedContent = await editTodo(lineIndex, newContent, currentYear)
+      const parsed = parseTodoMd(updatedContent)
+      setData(parsed)
+      message.success('修改成功')
+    } catch (e) {
+      message.error(String(e))
+    }
+  }
+
+  const handleDelete = async (lineIndex: number) => {
+    try {
+      const newContent = await deleteTodo(lineIndex, currentYear)
+      const parsed = parseTodoMd(newContent)
+      setData(parsed)
+      message.success('删除成功')
+    } catch (e) {
+      message.error(String(e))
+    }
   }
 
   const handleDocClick = (doc: { name: string; filename: string }) => {
@@ -188,24 +216,42 @@ function App() {
     },
   ]
 
+  // 显示加载状态
+  if (authLoading) {
+    return (
+      <Layout style={{ minHeight: '100vh' }}>
+        <Spin size="large" style={{ display: 'block', margin: '200px auto' }} />
+      </Layout>
+    )
+  }
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <Title level={3} style={{ margin: '16px 0' }}>TODO List</Title>
           <Space>
-            <Button
-              icon={<PlusOutlined />}
-              onClick={handleAddWeek}
-            >
-              新增周
-            </Button>
-            <Button
-              icon={<CalendarOutlined />}
-              onClick={handleWeekSettle}
-            >
-              周结算
-            </Button>
+            <Title level={3} style={{ margin: '16px 0' }}>TODO List</Title>
+            {isDemo && (
+              <Tag color="orange">试用模式</Tag>
+            )}
+          </Space>
+          <Space>
+            {!isDemo && (
+              <>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={handleAddWeek}
+                >
+                  新增周
+                </Button>
+                <Button
+                  icon={<CalendarOutlined />}
+                  onClick={handleWeekSettle}
+                >
+                  周结算
+                </Button>
+              </>
+            )}
             <Dropdown menu={{ items: docMenuItems }} placement="bottomRight">
               <Button icon={<FileTextOutlined />}>文档</Button>
             </Dropdown>
@@ -215,6 +261,53 @@ function App() {
               style={{ width: 120 }}
               options={years.map(y => ({ value: y, label: `${y} 年` }))}
             />
+            {isDemo ? (
+              <Button
+                type="primary"
+                icon={<LoginOutlined />}
+                onClick={() => setAuthModalOpen(true)}
+              >
+                登录
+              </Button>
+            ) : (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'user',
+                      label: user?.email,
+                      disabled: true,
+                    },
+                    { type: 'divider' },
+                    {
+                      key: 'settings',
+                      label: '设置',
+                      icon: <SettingOutlined />,
+                      onClick: () => setSettingsModalOpen(true),
+                    },
+                    {
+                      key: 'logout',
+                      label: '退出登录',
+                      icon: <LogoutOutlined />,
+                      danger: true,
+                      onClick: () => {
+                        Modal.confirm({
+                          title: '确认退出登录？',
+                          okText: '退出',
+                          cancelText: '取消',
+                          onOk: logout,
+                        })
+                      },
+                    },
+                  ],
+                }}
+                placement="bottomRight"
+              >
+                <Button icon={<UserOutlined />}>
+                  {user?.email?.split('@')[0]}
+                </Button>
+              </Dropdown>
+            )}
           </Space>
         </Space>
       </Header>
@@ -240,6 +333,9 @@ function App() {
               onAdd={handleAdd}
               onProjectAdd={handleProjectAdd}
               onReorder={handleReorder}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              readOnly={isDemo}
             />
 
             <Divider orientation="left">历史周记录</Divider>
@@ -249,6 +345,9 @@ function App() {
                 key={week.startLine}
                 week={week}
                 onToggle={handleToggle}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                readOnly={isDemo}
               />
             ))}
           </>
@@ -276,6 +375,18 @@ function App() {
         style={{ display: 'none' }}
         accept=".md"
         onChange={handleFileChange}
+      />
+
+      {/* 登录/注册模态框 */}
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
+
+      {/* 设置模态框 */}
+      <SettingsModal
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
       />
     </Layout>
   )

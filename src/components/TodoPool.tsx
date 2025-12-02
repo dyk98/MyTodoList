@@ -24,9 +24,12 @@ interface Props {
   onAdd: (task: string, project: string, weekLineIndex?: number) => Promise<void>
   onProjectAdd: (name: string) => Promise<void>
   onReorder: (fromLineIndex: number, toLineIndex: number) => Promise<void>
+  onEdit?: (lineIndex: number, newContent: string) => Promise<void>
+  onDelete?: (lineIndex: number) => Promise<void>
+  readOnly?: boolean
 }
 
-export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onReorder }: Props) {
+export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onReorder, onEdit, onDelete, readOnly = false }: Props) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('')
@@ -162,7 +165,14 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
           >
             <div style={{ marginTop: -20, paddingLeft: 24 }}>
               {project.items.map((item) => (
-                <TodoItem key={item.lineIndex} item={item} onToggle={onToggle} />
+                <TodoItem
+                  key={item.lineIndex}
+                  item={item}
+                  onToggle={onToggle}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  readOnly={readOnly}
+                />
               ))}
             </div>
           </SortableContext>
@@ -179,26 +189,28 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
     <Card
       title="待办池"
       extra={
-        <Space>
-          <Button
-            icon={<FolderAddOutlined />}
-            size="small"
-            onClick={() => setAddingProject(true)}
-          >
-            新增分类
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            size="small"
-            onClick={() => setAdding(true)}
-          >
-            新增任务
-          </Button>
-        </Space>
+        !readOnly && (
+          <Space>
+            <Button
+              icon={<FolderAddOutlined />}
+              size="small"
+              onClick={() => setAddingProject(true)}
+            >
+              新增分类
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={() => setAdding(true)}
+            >
+              新增任务
+            </Button>
+          </Space>
+        )
       }
     >
-      {adding && (
+      {!readOnly && adding && (
         <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 8 }}>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Input

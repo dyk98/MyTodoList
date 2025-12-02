@@ -5,9 +5,12 @@ import { TodoItem } from './TodoItem'
 interface Props {
   week: WeekBlockType
   onToggle: (lineIndex: number) => void
+  onEdit?: (lineIndex: number, newContent: string) => Promise<void>
+  onDelete?: (lineIndex: number) => Promise<void>
+  readOnly?: boolean
 }
 
-export function WeekBlock({ week, onToggle }: Props) {
+export function WeekBlock({ week, onToggle, onEdit, onDelete, readOnly = false }: Props) {
   return (
     <Card
       title={
@@ -24,7 +27,14 @@ export function WeekBlock({ week, onToggle }: Props) {
         <Empty description="暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         week.items.map((item) => (
-          <TodoItem key={item.lineIndex} item={item} onToggle={onToggle} />
+          <TodoItem
+            key={item.lineIndex}
+            item={item}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            readOnly={readOnly}
+          />
         ))
       )}
     </Card>
