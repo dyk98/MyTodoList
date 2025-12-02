@@ -162,6 +162,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <Space>
                 <Paragraph
                   copyable={{
+                    text: generatedCode,
                     icon: <CopyOutlined />,
                     onCopy: handleCopyCode,
                   }}

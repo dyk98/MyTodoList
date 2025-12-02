@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Checkbox, Typography, Button, Input, Popconfirm, Space } from 'antd'
-import { HolderOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { Checkbox, Typography, Button, Input, Popconfirm, Space, message } from 'antd'
+import { HolderOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { TodoItem as TodoItemType } from '@/types'
@@ -12,12 +12,15 @@ interface Props {
   onToggle: (lineIndex: number) => void
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
+  onAddSubtask?: (parentLineIndex: number, task: string) => Promise<void>
   readOnly?: boolean
 }
 
-export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }: Props) {
+export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.content)
+  const [addingSubtask, setAddingSubtask] = useState(false)
+  const [subtaskValue, setSubtaskValue] = useState('')
 
   const {
     attributes,
@@ -49,6 +52,23 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }:
   const handleDelete = async () => {
     if (onDelete) {
       await onDelete(item.lineIndex)
+    }
+  }
+
+  const handleAddSubtask = async () => {
+    if (!subtaskValue.trim()) {
+      message.warning('请输入子任务内容')
+      return
+    }
+    if (onAddSubtask) {
+      try {
+        await onAddSubtask(item.lineIndex, subtaskValue.trim())
+        setSubtaskValue('')
+        setAddingSubtask(false)
+        message.success('子任务添加成功')
+      } catch (e) {
+        message.error('添加失败: ' + String(e))
+      }
     }
   }
 
@@ -105,6 +125,13 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }:
                 <Button
                   type="text"
                   size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => setAddingSubtask(true)}
+                  title="添加子任务"
+                />
+                <Button
+                  type="text"
+                  size="small"
                   icon={<EditOutlined />}
                   onClick={() => setEditing(true)}
                 />
@@ -127,6 +154,23 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }:
           </>
         )}
       </div>
+      {addingSubtask && (
+        <div style={{ marginLeft: 24, padding: '8px 0' }}>
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              placeholder="输入子任务内容"
+              value={subtaskValue}
+              onChange={(e) => setSubtaskValue(e.target.value)}
+              onPressEnter={handleAddSubtask}
+              onKeyDown={(e) => e.key === 'Escape' && setAddingSubtask(false)}
+              autoFocus
+              size="small"
+            />
+            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={handleAddSubtask} />
+            <Button size="small" icon={<CloseOutlined />} onClick={() => { setAddingSubtask(false); setSubtaskValue('') }} />
+          </Space.Compact>
+        </div>
+      )}
       {item.children.length > 0 && (
         <div style={{ marginLeft: 24 }}>
           {item.children.map((child) => (
@@ -136,6 +180,7 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, readOnly = false }:
               onToggle={onToggle}
               onEdit={onEdit}
               onDelete={onDelete}
+              onAddSubtask={onAddSubtask}
               readOnly={readOnly}
             />
           ))}

@@ -220,6 +220,24 @@ export async function addTodo(
   return data.newContent
 }
 
+// 新增子任务
+export async function addSubtask(
+  task: string,
+  parentLineIndex: number,
+  year?: number
+): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/add-subtask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ task, parentLineIndex, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to add subtask')
+  }
+  return data.newContent
+}
+
 // 获取周列表
 export async function fetchWeeks(year?: number): Promise<{ title: string; lineIndex: number }[]> {
   const url = year ? `${BASE_URL}/weeks?year=${year}` : `${BASE_URL}/weeks`

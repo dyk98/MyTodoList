@@ -400,6 +400,62 @@ app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
   }
 })
 
+// 新增子任务（需要登录）
+app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { task, parentLineIndex, year } = req.body
+    const targetYear = year || new Date().getFullYear()
+
+    if (!task || typeof parentLineIndex !== 'number') {
+      return res.status(400).json({ success: false, error: 'task and parentLineIndex are required' })
+    }
+
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
+    const content = await fs.readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    if (parentLineIndex < 0 || parentLineIndex >= lines.length) {
+      return res.status(400).json({ success: false, error: 'Invalid parentLineIndex' })
+    }
+
+    const parentLine = lines[parentLineIndex]
+    if (!isTaskLine(parentLine)) {
+      return res.status(400).json({ success: false, error: 'Parent line is not a todo item' })
+    }
+
+    // 计算父任务的缩进，子任务需要多缩进 4 个空格
+    const parentIndent = parentLine.search(/\S/)
+    const childIndent = ' '.repeat(parentIndent + 4)
+
+    // 找到插入位置：父任务后面，在所有现有子任务之后
+    let insertIndex = parentLineIndex + 1
+    for (let i = parentLineIndex + 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.trim() === '') {
+        // 跳过空行
+        continue
+      }
+      const currentIndent = line.search(/\S/)
+      if (currentIndent <= parentIndent) {
+        // 遇到同级或更高级的内容，在这里插入
+        insertIndex = i
+        break
+      }
+      // 继续往下找
+      insertIndex = i + 1
+    }
+
+    // 插入新子任务
+    const newSubtask = `${childIndent}- [ ] ${task}`
+    lines.splice(insertIndex, 0, newSubtask)
+
+    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    res.json({ success: true, newContent: lines.join('\n') })
+  } catch (error) {
+    handleError(res, error, 'POST /api/todo/add-subtask')
+  }
+})
+
 // 新增分类（项目）（需要登录）
 app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
   try {

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
 import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
+import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
 import type { ParsedTodo } from '@/types'
@@ -105,6 +105,12 @@ function App() {
     } catch (e) {
       message.error(String(e))
     }
+  }
+
+  const handleAddSubtask = async (parentLineIndex: number, task: string) => {
+    const newContent = await addSubtask(task, parentLineIndex, currentYear)
+    const parsed = parseTodoMd(newContent)
+    setData(parsed)
   }
 
   const handleDocClick = (doc: { name: string; filename: string }) => {
@@ -335,6 +341,7 @@ function App() {
               onReorder={handleReorder}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onAddSubtask={handleAddSubtask}
               readOnly={isDemo}
             />
 
