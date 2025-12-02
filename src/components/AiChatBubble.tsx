@@ -50,7 +50,8 @@ export function AiChatBubble({ currentYear, onRefresh }: Props) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Shift+Enter 发送消息，Enter 换行
+    if (e.key === 'Enter' && e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
