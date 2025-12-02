@@ -22,8 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev
 
 # 单独启动
-npm run dev:client    # Vite 前端 (port 3000)
-npm run dev:server    # Express 后端 (port 3001)
+npm run dev:client    # Vite 前端 (port 3333)
+npm run dev:server    # Express 后端 (port 3334)
 
 # 构建
 npm run build
@@ -33,8 +33,8 @@ npm run build
 
 ### 前后端分离
 
-- **前端**: React + Vite + Ant Design，运行在 3000 端口
-- **后端**: Express 服务，运行在 3001 端口，负责读写 `data/` 目录下的 TODO 文件
+- **前端**: React + Vite + Ant Design，运行在 3333 端口
+- **后端**: Express 服务，运行在 3334 端口，负责读写 `data/` 目录下的 TODO 文件
 - Vite 配置了 `/api` 代理到后端
 
 ### 核心数据流

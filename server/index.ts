@@ -19,7 +19,7 @@ import {
 } from './auth.js'
 
 const app = express()
-const PORT = 3001
+const PORT = 3334
 
 // 项目根目录
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
