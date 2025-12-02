@@ -2,7 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'fs/promises'
 import path from 'path'
-import Anthropic from '@anthropic-ai/sdk'
+import { execSync } from 'child_process'
+import multer from 'multer'
 
 const app = express()
 const PORT = 3001
@@ -13,20 +14,92 @@ const DATA_DIR = path.resolve(import.meta.dirname, '../data')
 const DOCS_DIR = path.resolve(import.meta.dirname, '../otherDocs')
 // CLAUDE.md 路径
 const CLAUDE_MD_PATH = path.resolve(import.meta.dirname, '../CLAUDE.md')
-
-// 初始化 Anthropic 客户端
-const anthropic = new Anthropic({
-  baseURL: 'https://gaccode.com/claudecode',
-  apiKey: ''
-})
+// 项目根目录
+const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
 
 // 获取指定年份的文件路径
 function getTodoFilePath(year: number | string): string {
   return path.join(DATA_DIR, `${year}-todo.md`)
 }
 
+// ========== 统一的检测辅助函数 ==========
+
+// 占位文本常量
+const PLACEHOLDER_TEXT = '（暂无未完成任务）'
+
+// 检测是否为分隔线
+function isSeparator(line: string): boolean {
+  return line.trim() === '---'
+}
+
+// 检测是否为项目标题 (### xxx)
+function isProjectHeader(line: string): boolean {
+  return line.startsWith('### ')
+}
+
+// 检测是否为周标题 (## X月X日 - X月X日)
+function isWeekHeader(line: string): boolean {
+  return line.startsWith('## ') && /\d+月\d+日/.test(line)
+}
+
+// 检测是否为任务行
+function isTaskLine(line: string): boolean {
+  return /^(\s*)- \[[ x]\]/.test(line)
+}
+
+// 检测是否为已完成任务
+function isCompletedTask(line: string): boolean {
+  return /^(\s*)- \[x\]/.test(line)
+}
+
+// 检测是否为未完成任务
+function isPendingTask(line: string): boolean {
+  return /^(\s*)- \[ \]/.test(line)
+}
+
+// 检测是否为占位文本
+function isPlaceholder(line: string): boolean {
+  return line.trim() === PLACEHOLDER_TEXT
+}
+
+// 检测是否为区块边界（分隔线或项目标题）
+function isBlockBoundary(line: string): boolean {
+  return isSeparator(line) || isProjectHeader(line)
+}
+
+// 统一的错误处理函数
+function handleError(res: express.Response, error: unknown, context: string) {
+  console.error(`[${context}] Error:`, error)
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  res.status(500).json({ success: false, error: errorMessage })
+}
+
 app.use(cors())
 app.use(express.json())
+
+// 配置 multer 用于文件上传
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: DOCS_DIR,
+    filename: (_req, file, cb) => {
+      // 保留原文件名，使用 UTF-8 解码
+      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+      cb(null, originalName)
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    // 只允许上传 .md 文件
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+    if (originalName.endsWith('.md')) {
+      cb(null, true)
+    } else {
+      cb(new Error('只允许上传 .md 文件'))
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB 限制
+  },
+})
 
 // 获取可用年份列表
 app.get('/api/years', async (_req, res) => {
@@ -38,19 +111,19 @@ app.get('/api/years', async (_req, res) => {
       .sort((a, b) => b - a) // 降序，最新年份在前
     res.json({ success: true, years })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'GET /api/years')
   }
 })
 
 // 获取 TODO 文件内容（支持年份参数）
 app.get('/api/todo', async (req, res) => {
   try {
-    const year = req.query.year || new Date().getFullYear()
+    const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
     const filePath = getTodoFilePath(year)
     const content = await fs.readFile(filePath, 'utf-8')
     res.json({ success: true, content, year: Number(year) })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'GET /api/todo')
   }
 })
 
@@ -66,7 +139,7 @@ app.put('/api/todo', async (req, res) => {
     await fs.writeFile(filePath, content, 'utf-8')
     res.json({ success: true })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'PUT /api/todo')
   }
 })
 
@@ -88,9 +161,9 @@ app.patch('/api/todo/toggle', async (req, res) => {
     }
 
     const line = lines[lineIndex]
-    if (line.includes('- [ ]')) {
+    if (isPendingTask(line)) {
       lines[lineIndex] = line.replace('- [ ]', '- [x]')
-    } else if (line.includes('- [x]')) {
+    } else if (isCompletedTask(line)) {
       lines[lineIndex] = line.replace('- [x]', '- [ ]')
     } else {
       return res.status(400).json({ success: false, error: 'Line is not a todo item' })
@@ -99,7 +172,7 @@ app.patch('/api/todo/toggle', async (req, res) => {
     await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'PATCH /api/todo/toggle')
   }
 })
 
@@ -114,8 +187,7 @@ app.get('/api/weeks', async (req, res) => {
     const weeks: { title: string; lineIndex: number }[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      // 匹配周标题：## X月X日 - X月X日
-      if (line.startsWith('## ') && /\d+月\d+日/.test(line)) {
+      if (isWeekHeader(line)) {
         weeks.push({
           title: line.slice(3).trim(),
           lineIndex: i,
@@ -125,7 +197,7 @@ app.get('/api/weeks', async (req, res) => {
 
     res.json({ success: true, weeks })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'GET /api/weeks')
   }
 })
 
@@ -149,8 +221,8 @@ app.post('/api/todo/add', async (req, res) => {
       // 找到周标题后，在项目下添加（如果周内有该项目分类）或直接添加到周内
       // 周区块内任务直接添加，不分项目
       for (let j = weekLineIndex + 1; j < lines.length; j++) {
-        // 遇到下一个 ## 或 --- 就停止
-        if (lines[j].startsWith('## ') || lines[j].trim() === '---') {
+        // 遇到下一个周标题或分隔线就停止
+        if (isWeekHeader(lines[j]) || isSeparator(lines[j])) {
           insertIndex = j
           break
         }
@@ -164,13 +236,29 @@ app.post('/api/todo/add', async (req, res) => {
 
       for (let i = 0; i < lines.length; i++) {
         if (lines[i].trim() === projectHeader) {
-          // 找到项目标题后，找下一个空行或下一个 ### 之前插入
+          // 检查是否有占位文本需要移除
+          let placeholderIndex = -1
           for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].startsWith('###') || lines[j] === '---') {
+            if (isPlaceholder(lines[j])) {
+              placeholderIndex = j
+              break
+            }
+            // 遇到边界或任务行就停止搜索
+            if (isBlockBoundary(lines[j]) || isTaskLine(lines[j])) {
+              break
+            }
+          }
+          if (placeholderIndex !== -1) {
+            lines.splice(placeholderIndex, 1)
+          }
+
+          // 找到项目标题后，找下一个边界之前插入
+          for (let j = i + 1; j < lines.length; j++) {
+            if (isBlockBoundary(lines[j])) {
               insertIndex = j
               break
             }
-            if (lines[j].trim() === '' && lines[j + 1]?.startsWith('###')) {
+            if (lines[j].trim() === '' && lines[j + 1] && isProjectHeader(lines[j + 1])) {
               insertIndex = j
               break
             }
@@ -194,7 +282,7 @@ app.post('/api/todo/add', async (req, res) => {
     await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'POST /api/todo/add')
   }
 })
 
@@ -219,8 +307,8 @@ app.post('/api/project/add', async (req, res) => {
       }
     }
 
-    // 找到待办池中最后一个 ### 分类的位置，在其后插入新分类
-    let insertIndex = -1
+    // 找到待办池中的 --- 分隔线位置，在其前插入新分类
+    let separatorIndex = -1
     let inPool = false
 
     for (let i = 0; i < lines.length; i++) {
@@ -229,37 +317,23 @@ app.post('/api/project/add', async (req, res) => {
         inPool = true
         continue
       }
-      if (inPool && line.trim() === '---') {
-        // 在分隔线前插入
-        insertIndex = i
-        break
-      }
-      if (inPool && line.startsWith('### ')) {
-        // 记录最后一个项目位置
-        insertIndex = i
-      }
-    }
-
-    if (insertIndex === -1) {
-      return res.status(400).json({ success: false, error: '未找到待办池' })
-    }
-
-    // 找到 insertIndex 后面的合适位置（在该分类内容结束后）
-    let actualInsertIndex = insertIndex + 1
-    for (let j = insertIndex + 1; j < lines.length; j++) {
-      if (lines[j].startsWith('###') || lines[j].trim() === '---') {
-        actualInsertIndex = j
+      if (inPool && isSeparator(line)) {
+        separatorIndex = i
         break
       }
     }
 
-    // 插入新分类
-    lines.splice(actualInsertIndex, 0, '', projectHeader, '')
+    if (separatorIndex === -1) {
+      return res.status(400).json({ success: false, error: '未找到待办池分隔线' })
+    }
+
+    // 在 --- 分隔线前插入新分类
+    lines.splice(separatorIndex, 0, projectHeader, '', PLACEHOLDER_TEXT, '')
 
     await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'POST /api/project/add')
   }
 })
 
@@ -289,7 +363,7 @@ app.post('/api/todo/reorder', async (req, res) => {
     // 收集子任务
     for (let i = fromLineIndex + 1; i < lines.length; i++) {
       const line = lines[i]
-      if (line.trim() === '' || line.startsWith('###') || line.trim() === '---') {
+      if (line.trim() === '' || isBlockBoundary(line)) {
         break
       }
       const indent = line.search(/\S/)
@@ -315,7 +389,7 @@ app.post('/api/todo/reorder', async (req, res) => {
     await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'POST /api/todo/reorder')
   }
 })
 
@@ -371,23 +445,23 @@ app.post('/api/todo/week-settle', async (req, res) => {
         continue
       }
 
-      if (inPool && line.trim() === '---') {
+      if (inPool && isSeparator(line)) {
         break
       }
 
-      if (inPool && line.startsWith('### ')) {
+      if (inPool && isProjectHeader(line)) {
         currentProject = line.slice(4).trim()
         continue
       }
 
       // 收集已完成的一级任务（包括其子任务）
-      if (inPool && /^- \[x\]/.test(line.trim())) {
+      if (inPool && isCompletedTask(line.trim())) {
         const taskLines: string[] = [line]
         const baseIndent = line.search(/\S/)
 
         for (let j = i + 1; j < lines.length; j++) {
           const nextLine = lines[j]
-          if (nextLine.trim() === '' || nextLine.startsWith('###') || nextLine.trim() === '---') {
+          if (nextLine.trim() === '' || isBlockBoundary(nextLine)) {
             break
           }
           const nextIndent = nextLine.search(/\S/)
@@ -418,16 +492,16 @@ app.post('/api/todo/week-settle', async (req, res) => {
         continue
       }
 
-      if (inPool && line.trim() === '---') {
+      if (inPool && isSeparator(line)) {
         break
       }
 
-      if (inPool && /^- \[x\]/.test(line.trim())) {
+      if (inPool && isCompletedTask(line.trim())) {
         linesToRemove.add(i)
         const baseIndent = line.search(/\S/)
         for (let j = i + 1; j < lines.length; j++) {
           const nextLine = lines[j]
-          if (nextLine.trim() === '' || nextLine.startsWith('###') || nextLine.trim() === '---') {
+          if (nextLine.trim() === '' || isBlockBoundary(nextLine)) {
             break
           }
           const nextIndent = nextLine.search(/\S/)
@@ -443,6 +517,49 @@ app.post('/api/todo/week-settle', async (req, res) => {
     // 3. 过滤掉要删除的行
     lines = lines.filter((_, i) => !linesToRemove.has(i))
 
+    // 3.5 检查待办池中是否有分类变空，如果变空则添加占位文本
+    inPool = false
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.trim() === '## 待办池') {
+        inPool = true
+        continue
+      }
+      if (inPool && isSeparator(line)) {
+        break
+      }
+      // 检查项目标题后是否为空（下一个非空行是另一个项目标题或分隔线）
+      if (inPool && isProjectHeader(line)) {
+        let hasContent = false
+        let insertPlaceholderAt = -1
+        for (let j = i + 1; j < lines.length; j++) {
+          const nextLine = lines[j]
+          if (nextLine.trim() === '') {
+            if (insertPlaceholderAt === -1) insertPlaceholderAt = j
+            continue
+          }
+          if (isBlockBoundary(nextLine)) {
+            // 分类为空，需要添加占位文本
+            if (!hasContent && insertPlaceholderAt === -1) {
+              insertPlaceholderAt = j
+            }
+            break
+          }
+          if (isPlaceholder(nextLine)) {
+            hasContent = true // 已经有占位文本
+            break
+          }
+          if (isTaskLine(nextLine)) {
+            hasContent = true
+            break
+          }
+        }
+        if (!hasContent && insertPlaceholderAt !== -1) {
+          lines.splice(insertPlaceholderAt, 0, PLACEHOLDER_TEXT)
+        }
+      }
+    }
+
     // 4. 找到现有的周区块，确定当前周是否存在
     const currentMonday = getMonday(new Date())
     const currentWeekTitle = formatWeekTitle(currentMonday)
@@ -451,7 +568,7 @@ app.post('/api/todo/week-settle', async (req, res) => {
     const weekBlocks: { title: string; lineIndex: number; monday: Date }[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      if (line.startsWith('## ') && /\d+月\d+日/.test(line)) {
+      if (isWeekHeader(line)) {
         const title = line.slice(3).trim()
         const monday = parseWeekTitle(title)
         if (monday) {
@@ -463,7 +580,7 @@ app.post('/api/todo/week-settle', async (req, res) => {
     // 5. 找到待办池后的第一个 --- 位置（插入新周区块的位置）
     let insertPosition = -1
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim() === '---') {
+      if (isSeparator(lines[i])) {
         insertPosition = i + 1
         break
       }
@@ -474,7 +591,7 @@ app.post('/api/todo/week-settle', async (req, res) => {
     }
 
     // 6. 检查是否需要创建缺失的周区块
-    let currentWeekLineIndex = -1
+    let currentWeekLineIndex: number
 
     if (weekBlocks.length === 0) {
       // 没有任何周区块，创建当前周
@@ -525,10 +642,10 @@ app.post('/api/todo/week-settle', async (req, res) => {
       }
     }
 
-    // 8. 找到当前周区块的结束位置（下一个 --- 或 ## 或文件结尾）
+    // 8. 找到当前周区块的结束位置（下一个 --- 或周标题或文件结尾）
     let weekEndIndex = lines.length
     for (let i = currentWeekLineIndex + 1; i < lines.length; i++) {
-      if (lines[i].trim() === '---' || (lines[i].startsWith('## ') && i !== currentWeekLineIndex)) {
+      if (isSeparator(lines[i]) || isWeekHeader(lines[i])) {
         weekEndIndex = i
         break
       }
@@ -567,7 +684,7 @@ app.post('/api/todo/week-settle', async (req, res) => {
       weekTitle: currentWeekTitle
     })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'POST /api/todo/week-settle')
   }
 })
 
@@ -583,7 +700,7 @@ app.get('/api/docs', async (_req, res) => {
       }))
     res.json({ success: true, docs })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'GET /api/docs')
   }
 })
 
@@ -599,67 +716,117 @@ app.get('/api/docs/:filename', async (req, res) => {
     const content = await fs.readFile(filePath, 'utf-8')
     res.json({ success: true, content })
   } catch (error) {
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'GET /api/docs/:filename')
   }
 })
 
-// AI 聊天接口
+// 上传文档
+app.post('/api/docs/upload', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: '没有上传文件' })
+    }
+    const filename = req.file.filename
+    res.json({
+      success: true,
+      filename,
+      name: filename.replace('.md', ''),
+    })
+  } catch (error) {
+    handleError(res, error, 'POST /api/docs/upload')
+  }
+})
+
+// 新增周区块
+app.post('/api/week/add', async (req, res) => {
+  try {
+    const { year, weekTitle } = req.body
+    const targetYear = year || new Date().getFullYear()
+
+    if (!weekTitle) {
+      return res.status(400).json({ success: false, error: 'weekTitle is required' })
+    }
+
+    const filePath = getTodoFilePath(targetYear)
+    const content = await fs.readFile(filePath, 'utf-8')
+    const lines = content.split('\n')
+
+    // 检查周区块是否已存在（使用精确匹配）
+    const targetWeekHeader = `## ${weekTitle}`
+    for (const line of lines) {
+      if (line.trim() === targetWeekHeader) {
+        return res.status(400).json({ success: false, error: '该周区块已存在' })
+      }
+    }
+
+    // 找到待办池后的第一个 --- 位置
+    let insertPosition = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (isSeparator(lines[i])) {
+        insertPosition = i + 1
+        break
+      }
+    }
+
+    if (insertPosition === -1) {
+      insertPosition = lines.length
+    }
+
+    // 插入新周区块
+    const newWeekBlock = ['', '---', '', `## ${weekTitle}`, '']
+    lines.splice(insertPosition, 0, ...newWeekBlock)
+
+    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    res.json({ success: true, newContent: lines.join('\n') })
+  } catch (error) {
+    handleError(res, error, 'POST /api/week/add')
+  }
+})
+
+// AI 聊天接口 - 使用 claude CLI
 app.post('/api/ai/chat', async (req, res) => {
   try {
-    const { message, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const { message, history = [] } = req.body
 
     if (!message) {
       return res.status(400).json({ success: false, error: 'message is required' })
     }
 
-    // 读取 CLAUDE.md 和当前 TODO 文件
-    const [claudeMd, todoContent] = await Promise.all([
-      fs.readFile(CLAUDE_MD_PATH, 'utf-8').catch(() => ''),
-      fs.readFile(getTodoFilePath(targetYear), 'utf-8').catch(() => ''),
-    ])
+    // 构建包含历史的 prompt
+    // 只取最近 5 条对话（10 条消息）
+    const recentHistory = (history as { role: string; content: string }[]).slice(-10)
+    let fullPrompt = ''
 
-    // 构建 system prompt
-    const systemPrompt = `你是一个 TODO 管理助手，帮助用户管理他们的工作任务。
+    if (recentHistory.length > 0) {
+      fullPrompt += '以下是之前的对话历史：\n\n'
+      for (const msg of recentHistory) {
+        const roleLabel = msg.role === 'user' ? '用户' : '助手'
+        fullPrompt += `${roleLabel}: ${msg.content}\n\n`
+      }
+      fullPrompt += '---\n\n现在用户说：\n\n'
+    }
 
-${claudeMd}
+    fullPrompt += message
 
----
+    // 使用 claude CLI 执行任务
+    // --print 模式直接输出结果
+    // --allowedTools 限制可用工具为 Read 和 Edit
+    // --permission-mode acceptEdits 自动接受编辑
+    const escapedMessage = fullPrompt.replace(/"/g, '\\"').replace(/`/g, '\\`').replace(/\$/g, '\\$')
+    const command = `claude -p "${escapedMessage}" --allowedTools "Read,Edit" --permission-mode acceptEdits`
 
-当前 TODO 文件内容（${targetYear}年）：
-\`\`\`markdown
-${todoContent}
-\`\`\`
+    console.log('Executing claude command with history, message length:', fullPrompt.length)
 
----
-
-你的职责：
-1. 当用户说完成了某个任务，输出需要添加到本周区块的任务记录（格式：- [x] 任务内容）
-2. 当用户说要记录新任务，输出需要添加到待办池的任务（格式：- [ ] 任务内容，并说明应该放到哪个分类）
-3. 当用户询问任务状态，根据 TODO 文件回答
-4. 帮助用户拆解复杂任务
-
-请用简洁的中文回复，如果涉及到任务操作，请明确说明操作内容。`
-
-    // 使用流式请求
-    const stream = await anthropic.messages.stream({
-      model: 'claude-opus-4-5',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: message }
-      ],
+    const result = execSync(command, {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf-8',
+      timeout: 120000, // 2 分钟超时
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     })
 
-    // 收集完整响应
-    const finalMessage = await stream.finalMessage()
-    const textContent = finalMessage.content.find(c => c.type === 'text')
-    const reply = textContent ? textContent.text : ''
-
-    res.json({ success: true, reply })
+    res.json({ success: true, reply: result.trim() })
   } catch (error) {
-    console.error('AI chat error:', error)
-    res.status(500).json({ success: false, error: String(error) })
+    handleError(res, error, 'POST /api/ai/chat')
   }
 })
 

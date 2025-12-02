@@ -1,15 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { FloatButton, Drawer, Input, Button, List, Typography, Spin } from 'antd'
 import { RobotOutlined, SendOutlined, CloseOutlined } from '@ant-design/icons'
-import { aiChat } from '@/utils/api'
+import { aiChat, type ChatMessage } from '@/utils/api'
 
 const { TextArea } = Input
 const { Text } = Typography
-
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 interface Props {
   currentYear: number
@@ -18,7 +13,7 @@ interface Props {
 
 export function AiChatBubble({ currentYear, onRefresh }: Props) {
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -40,7 +35,8 @@ export function AiChatBubble({ currentYear, onRefresh }: Props) {
     setLoading(true)
 
     try {
-      const reply = await aiChat(userMessage, currentYear)
+      // 传递最近 5 条对话（10 条消息）作为历史
+      const reply = await aiChat(userMessage, messages.slice(-10), currentYear)
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
       // 如果 AI 回复中包含任务操作相关内容，刷新数据
       if (reply.includes('- [') || reply.includes('已添加') || reply.includes('已记录')) {

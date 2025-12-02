@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message } from 'antd'
-import { FileTextOutlined, CalendarOutlined } from '@ant-design/icons'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input } from 'antd'
+import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble } from '@/components'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addProject, fetchDocs, weekSettle, reorderTodo } from '@/utils/api'
+import { fetchTodo, fetchYears, toggleTodo, addTodo, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import type { ParsedTodo } from '@/types'
 
@@ -109,12 +109,84 @@ function App() {
     })
   }
 
+  // 新增周区块
+  const handleAddWeek = () => {
+    let weekTitleInput = ''
+
+    Modal.confirm({
+      title: '新增周区块',
+      content: (
+        <div>
+          <p style={{ marginBottom: 8 }}>输入周区块标题（格式：X月X日 - X月X日）</p>
+          <Input
+            placeholder="例如：12月9日 - 12月15日"
+            onChange={(e) => { weekTitleInput = e.target.value }}
+          />
+        </div>
+      ),
+      okText: '创建',
+      cancelText: '取消',
+      onOk: async () => {
+        if (!weekTitleInput.trim()) {
+          message.warning('请输入周区块标题')
+          return Promise.reject()
+        }
+        try {
+          const newContent = await addWeek(weekTitleInput.trim(), currentYear)
+          const parsed = parseTodoMd(newContent)
+          setData(parsed)
+          message.success(`周区块「${weekTitleInput}」创建成功`)
+        } catch (e) {
+          message.error(String(e))
+          return Promise.reject()
+        }
+      },
+    })
+  }
+
+  // 文档上传
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.md')) {
+      message.error('只能上传 .md 文件')
+      return
+    }
+
+    try {
+      const result = await uploadDoc(file)
+      setDocs(prev => [...prev, result])
+      message.success(`文档「${result.name}」上传成功`)
+    } catch (err) {
+      message.error(String(err))
+    }
+
+    // 清空 input 以便可以再次上传同名文件
+    e.target.value = ''
+  }
+
   // 文档下拉菜单
-  const docMenuItems = docs.map(doc => ({
-    key: doc.filename,
-    label: doc.name,
-    onClick: () => handleDocClick(doc),
-  }))
+  const docMenuItems = [
+    ...docs.map(doc => ({
+      key: doc.filename,
+      label: doc.name,
+      onClick: () => handleDocClick(doc),
+    })),
+    { type: 'divider' as const, key: 'divider' },
+    {
+      key: 'upload',
+      label: '上传文档',
+      icon: <UploadOutlined />,
+      onClick: handleUploadClick,
+    },
+  ]
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -122,6 +194,12 @@ function App() {
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Title level={3} style={{ margin: '16px 0' }}>TODO List</Title>
           <Space>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={handleAddWeek}
+            >
+              新增周
+            </Button>
             <Button
               icon={<CalendarOutlined />}
               onClick={handleWeekSettle}
@@ -189,6 +267,15 @@ function App() {
       <AiChatBubble
         currentYear={currentYear}
         onRefresh={() => loadData(currentYear)}
+      />
+
+      {/* 隐藏的文件上传 input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".md"
+        onChange={handleFileChange}
       />
     </Layout>
   )

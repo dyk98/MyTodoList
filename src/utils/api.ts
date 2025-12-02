@@ -142,12 +142,46 @@ export async function fetchDocContent(filename: string): Promise<string> {
   return data.content
 }
 
+// 上传文档
+export async function uploadDoc(file: File): Promise<{ name: string; filename: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${BASE_URL}/docs/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  const data = await res.json() as { success: boolean; name?: string; filename?: string; error?: string }
+  if (!data.success || !data.filename) {
+    throw new Error(data.error || 'Failed to upload doc')
+  }
+  return { name: data.name!, filename: data.filename }
+}
+
+// 新增周区块
+export async function addWeek(weekTitle: string, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/week/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ weekTitle, year }),
+  })
+  const data = await res.json() as { success: boolean; newContent?: string; error?: string }
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to add week')
+  }
+  return data.newContent
+}
+
 // AI 聊天
-export async function aiChat(message: string, year?: number): Promise<string> {
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export async function aiChat(message: string, history: ChatMessage[] = [], year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, year }),
+    body: JSON.stringify({ message, history, year }),
   })
   const data = await res.json() as { success: boolean; reply?: string; error?: string }
   if (!data.success || !data.reply) {

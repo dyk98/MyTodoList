@@ -214,7 +214,7 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
                 onChange={setSelectedProject}
                 style={{ width: 150 }}
                 placeholder="选择分类"
-                options={projects.map((p) => ({ label: p.name, value: p.name }))}
+                options={projects.map((p) => ({ label: p.name + (p.items.length === 0 ? ' (空)' : ''), value: p.name }))}
               />
               <Select
                 value={selectedPeriod}

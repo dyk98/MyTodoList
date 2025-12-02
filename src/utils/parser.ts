@@ -75,7 +75,7 @@ export function parseTodoMd(content: string): ParsedTodo {
     // 检测周区块标题（## X月X日 - X月X日）
     if (line.startsWith('## ') && /\d+月\d+日/.test(line)) {
       // 保存上一个项目（如果在 pool 中）
-      if (currentSection === 'pool' && currentProject && tempItems.length > 0) {
+      if (currentSection === 'pool' && currentProject) {
         currentProject.items = buildTaskTree(tempItems)
         pool.push(currentProject)
         tempItems = []
@@ -103,7 +103,7 @@ export function parseTodoMd(content: string): ParsedTodo {
     // 检测分隔线
     if (line.trim() === '---') {
       // 保存当前项目
-      if (currentSection === 'pool' && currentProject && tempItems.length > 0) {
+      if (currentSection === 'pool' && currentProject) {
         currentProject.items = buildTaskTree(tempItems)
         pool.push(currentProject)
         tempItems = []
