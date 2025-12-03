@@ -1090,6 +1090,10 @@ app.post('/api/ai/chat', optionalAuthMiddleware, async (req: AuthRequest, res) =
       encoding: 'utf-8',
       timeout: 120000, // 2 分钟超时
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      env: {
+        ...process.env, // 继承当前进程的所有环境变量
+        HOME: process.env.HOME || require('os').homedir(), // 确保 HOME 环境变量存在
+      },
     })
 
     res.json({ success: true, reply: result.trim() })

@@ -5,6 +5,24 @@
       "passwordHash": "$2b$10$VC08CEwG50EHYz.rgxWIN.XhI3x28F.UQzy866CAttOiTr1tJfFs2",
       "createdAt": "2025-12-02T06:52:40.207Z",
       "isAdmin": true
+    },
+    {
+      "email": "perrinewang@tencent.com",
+      "passwordHash": "$2b$10$5b.mrNYDE3nvRk1ib/jjwux5/8pkARBz13nBER8AOoICAjto7SR4W",
+      "createdAt": "2025-12-02T08:29:30.096Z",
+      "isAdmin": false
+    },
+    {
+      "email": "siyuanqin@tencent.com",
+      "passwordHash": "$2b$10$cek9kef/P2U6/Rr55taojutoZDp0QhaeCW5E5lM/xCNTOHE5nCdUi",
+      "createdAt": "2025-12-02T08:31:51.301Z",
+      "isAdmin": false
+    },
+    {
+      "email": "kavinxiong@tencent.com",
+      "passwordHash": "$2b$10$f74gY7Q09hWRVzvPxcMgVuM2yfhAE/kflHRdazsLVRmo6Snv4aYmy",
+      "createdAt": "2025-12-02T08:35:37.275Z",
+      "isAdmin": false
     }
   ]
 }
