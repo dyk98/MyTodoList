@@ -920,21 +920,105 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
       tasksByProject[task.projectName].push(...task.lines)
     }
 
-    const taskLines: string[] = []
-    for (const projectName of Object.keys(tasksByProject)) {
-      const tasks = tasksByProject[projectName]
-      if (projectName) {
-        taskLines.push(`- [x] ${projectName}`)
-        for (const taskLine of tasks) {
-          taskLines.push('    ' + taskLine.trim())
+    // 10. 扫描当前周区块中已存在的项目分类，合并而非重复创建
+    // 周区块中的项目格式为 "- [x] 项目名"
+    const existingProjects: { name: string; endLineIndex: number }[] = []
+    for (let i = currentWeekLineIndex + 1; i < weekEndIndex; i++) {
+      const line = lines[i]
+      // 匹配一级任务格式 "- [x] 项目名"（无前导空格）
+      const match = line.match(/^- \[x\] (.+)$/)
+      if (match) {
+        const projectName = match[1]
+        // 找到这个项目分类的结束位置（下一个同级任务或区块结束）
+        let projectEndIndex = i + 1
+        for (let j = i + 1; j < weekEndIndex; j++) {
+          const nextLine = lines[j]
+          // 如果遇到另一个一级任务（无缩进的 - [x]），结束
+          if (nextLine.match(/^- \[x\] .+$/)) {
+            projectEndIndex = j
+            break
+          }
+          // 如果是子任务（有缩进），继续
+          if (nextLine.match(/^\s+- \[.?\]/) || nextLine.match(/^\s+\S/)) {
+            projectEndIndex = j + 1
+            continue
+          }
+          // 空行，继续
+          if (nextLine.trim() === '') {
+            projectEndIndex = j + 1
+            continue
+          }
+          // 其他情况（如分隔线），结束
+          projectEndIndex = j
+          break
         }
-      } else {
-        taskLines.push(...tasks.map((t: string) => t.trim()))
+        existingProjects.push({ name: projectName, endLineIndex: projectEndIndex })
       }
     }
 
-    // 10. 在当前周区块末尾插入任务
-    lines.splice(weekEndIndex, 0, ...taskLines, '')
+    // 11. 分类合并：已存在的分类追加到末尾，新分类添加到周区块末尾
+    const projectsToAddAtEnd: string[] = [] // 需要在周区块末尾新建的项目
+    const insertions: { index: number; lines: string[] }[] = [] // 需要在现有项目末尾插入的内容
+
+    for (const projectName of Object.keys(tasksByProject)) {
+      const tasks = tasksByProject[projectName]
+      if (projectName) {
+        // 查找是否已存在该分类
+        const existing = existingProjects.find(p => p.name === projectName)
+        if (existing) {
+          // 已存在，在该分类末尾追加任务
+          const linesToInsert = tasks.map((taskLine: string) => '    ' + taskLine.trim())
+          insertions.push({ index: existing.endLineIndex, lines: linesToInsert })
+          // 更新后续项目的 endLineIndex（因为插入了新行）
+          const insertCount = linesToInsert.length
+          for (const p of existingProjects) {
+            if (p.endLineIndex >= existing.endLineIndex) {
+              p.endLineIndex += insertCount
+            }
+          }
+          weekEndIndex += insertCount
+        } else {
+          // 不存在，需要在周区块末尾新建
+          projectsToAddAtEnd.push(projectName)
+        }
+      } else {
+        // 无项目名的任务，直接添加到末尾
+        projectsToAddAtEnd.push('')
+      }
+    }
+
+    // 按索引从大到小排序，从后往前插入避免索引偏移
+    insertions.sort((a, b) => b.index - a.index)
+    for (const insertion of insertions) {
+      lines.splice(insertion.index, 0, ...insertion.lines)
+    }
+
+    // 重新计算 weekEndIndex（因为可能有插入）
+    weekEndIndex = lines.length
+    for (let i = currentWeekLineIndex + 1; i < lines.length; i++) {
+      if (isSeparator(lines[i]) || isWeekHeader(lines[i])) {
+        weekEndIndex = i
+        break
+      }
+    }
+
+    // 在周区块末尾添加新项目分类
+    const newProjectLines: string[] = []
+    for (const projectName of projectsToAddAtEnd) {
+      const tasks = tasksByProject[projectName]
+      if (projectName) {
+        newProjectLines.push(`- [x] ${projectName}`)
+        for (const taskLine of tasks) {
+          newProjectLines.push('    ' + taskLine.trim())
+        }
+      } else {
+        newProjectLines.push(...tasks.map((t: string) => t.trim()))
+      }
+    }
+
+    if (newProjectLines.length > 0) {
+      lines.splice(weekEndIndex, 0, ...newProjectLines, '')
+    }
 
     await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
     res.json({
