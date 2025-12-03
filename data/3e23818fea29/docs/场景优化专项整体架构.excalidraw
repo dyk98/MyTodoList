@@ -901,8 +901,8 @@
     },
     {
       "type": "text",
-      "version": 39,
-      "versionNonce": 958469425,
+      "version": 40,
+      "versionNonce": 2080906486,
       "isDeleted": false,
       "id": "quality-features",
       "fillStyle": "solid",
@@ -915,14 +915,14 @@
       "y": 628.75,
       "strokeColor": "#c92a2a",
       "backgroundColor": "transparent",
-      "width": 218.93197631835938,
-      "height": 105,
+      "width": 238.3219757080078,
+      "height": 122.5,
       "seed": 27,
       "groupIds": [],
       "frameId": null,
       "roundness": null,
       "boundElements": [],
-      "updated": 1764671965918,
+      "updated": 1764682254413,
       "link": null,
       "locked": false,
       "fontSize": 14,
@@ -933,7 +933,7 @@
       "containerId": null,
       "originalText": "两种模式：\n① 快速启动（新场景推荐）\n  • AI生成配置→勾选角色→生成对话\n  • 用户标注评价→AI优化→重复\n② 自动循环（已有评测集）\n  • 评测集管理（AI生成+种子扩展）\n  • 自动归因→配置优化→循环迭代",
       "lineHeight": 1.25,
-      "baseline": 100
+      "baseline": 118
     },
     {
       "type": "rectangle",
