@@ -23,6 +23,12 @@
       "passwordHash": "$2b$10$f74gY7Q09hWRVzvPxcMgVuM2yfhAE/kflHRdazsLVRmo6Snv4aYmy",
       "createdAt": "2025-12-02T08:35:37.275Z",
       "isAdmin": false
+    },
+    {
+      "email": "c990330@126.com",
+      "passwordHash": "$2b$10$pTUhTx1TiqI3n.TvQSUlZubRsRlSw3UVjehMuJnA8lQMm8cIkzibC",
+      "createdAt": "2025-12-03T05:22:14.761Z",
+      "isAdmin": false
     }
   ]
 }
