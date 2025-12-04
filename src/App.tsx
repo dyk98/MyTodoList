@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
-import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons'
+import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,6 +13,7 @@ const { Title } = Typography
 
 function App() {
   const { user, loading: authLoading, isDemo, logout } = useAuth()
+  const isMobile = useIsMobile()
   const [data, setData] = useState<ParsedTodo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -222,6 +224,38 @@ function App() {
     },
   ]
 
+  // 移动端操作菜单
+  const mobileMenuItems = [
+    ...(!isDemo ? [
+      {
+        key: 'addWeek',
+        label: '新增周',
+        icon: <PlusOutlined />,
+        onClick: handleAddWeek,
+      },
+      {
+        key: 'weekSettle',
+        label: '周结算',
+        icon: <CalendarOutlined />,
+        onClick: handleWeekSettle,
+      },
+      { type: 'divider' as const, key: 'divider1' },
+    ] : []),
+    ...docs.map(doc => ({
+      key: doc.filename,
+      label: doc.name,
+      icon: <FileTextOutlined />,
+      onClick: () => handleDocClick(doc),
+    })),
+    { type: 'divider' as const, key: 'divider2' },
+    {
+      key: 'upload',
+      label: '上传文档',
+      icon: <UploadOutlined />,
+      onClick: handleUploadClick,
+    },
+  ]
+
   // 显示加载状态
   if (authLoading) {
     return (
@@ -233,38 +267,48 @@ function App() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }}>
+      <Header style={{ background: '#fff', padding: 'var(--header-padding)', borderBottom: '1px solid #f0f0f0' }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
-            <Title level={3} style={{ margin: '16px 0' }}>TODO List</Title>
+            <Title level={3} style={{ margin: '16px 0', fontSize: isMobile ? 18 : 24 }}>TODO List</Title>
             {isDemo && (
-              <Tag color="orange">试用模式</Tag>
+              <Tag color="orange">试用</Tag>
             )}
           </Space>
-          <Space>
-            {!isDemo && (
+          <Space size={isMobile ? 4 : 8}>
+            {isMobile ? (
+              // 移动端：收纳为菜单
+              <Dropdown menu={{ items: mobileMenuItems }} placement="bottomRight">
+                <Button icon={<MenuOutlined />} />
+              </Dropdown>
+            ) : (
+              // 电脑端：展开按钮
               <>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={handleAddWeek}
-                >
-                  新增周
-                </Button>
-                <Button
-                  icon={<CalendarOutlined />}
-                  onClick={handleWeekSettle}
-                >
-                  周结算
-                </Button>
+                {!isDemo && (
+                  <>
+                    <Button
+                      icon={<PlusOutlined />}
+                      onClick={handleAddWeek}
+                    >
+                      新增周
+                    </Button>
+                    <Button
+                      icon={<CalendarOutlined />}
+                      onClick={handleWeekSettle}
+                    >
+                      周结算
+                    </Button>
+                  </>
+                )}
+                <Dropdown menu={{ items: docMenuItems }} placement="bottomRight">
+                  <Button icon={<FileTextOutlined />}>文档</Button>
+                </Dropdown>
               </>
             )}
-            <Dropdown menu={{ items: docMenuItems }} placement="bottomRight">
-              <Button icon={<FileTextOutlined />}>文档</Button>
-            </Dropdown>
             <Select
               value={currentYear}
               onChange={handleYearChange}
-              style={{ width: 120 }}
+              style={{ width: isMobile ? 90 : 120 }}
               options={years.map(y => ({ value: y, label: `${y} 年` }))}
             />
             {isDemo ? (
@@ -273,7 +317,7 @@ function App() {
                 icon={<LoginOutlined />}
                 onClick={() => setAuthModalOpen(true)}
               >
-                登录
+                {isMobile ? '' : '登录'}
               </Button>
             ) : (
               <Dropdown
@@ -310,14 +354,14 @@ function App() {
                 placement="bottomRight"
               >
                 <Button icon={<UserOutlined />}>
-                  {user?.email?.split('@')[0]}
+                  {isMobile ? '' : user?.email?.split('@')[0]}
                 </Button>
               </Dropdown>
             )}
           </Space>
         </Space>
       </Header>
-      <Content style={{ padding: 24, maxWidth: 900, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: 'var(--content-padding)', maxWidth: 'var(--content-max-width)', margin: '0 auto', width: '100%' }}>
         {loading && <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />}
 
         {error && (

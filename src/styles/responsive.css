@@ -1,0 +1,27 @@
+/* 响应式断点: 768px */
+/* 手机: ≤768px | 电脑: >768px */
+
+:root {
+  --header-padding: 0 24px;
+  --content-padding: 24px;
+  --content-max-width: 900px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --header-padding: 0 12px;
+    --content-padding: 12px;
+    --content-max-width: 100%;
+  }
+
+  /* 移动端 TodoItem 操作按钮始终显示 */
+  .todo-item-actions {
+    opacity: 1 !important;
+  }
+
+  /* 移动端增大拖拽把手的触摸区域 */
+  .todo-item-row .anticon-holder {
+    padding: 8px;
+    margin: -8px;
+  }
+}

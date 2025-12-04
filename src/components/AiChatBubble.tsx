@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { FloatButton, Drawer, Input, Button, List, Typography, Spin } from 'antd'
 import { RobotOutlined, SendOutlined, CloseOutlined } from '@ant-design/icons'
 import { aiChat, type ChatMessage } from '@/utils/api'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function AiChatBubble({ currentYear, onRefresh }: Props) {
+  const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -69,7 +71,7 @@ export function AiChatBubble({ currentYear, onRefresh }: Props) {
       <Drawer
         title="AI 助手"
         placement="right"
-        width={400}
+        width={isMobile ? '100%' : 400}
         open={open}
         onClose={() => setOpen(false)}
         extra={

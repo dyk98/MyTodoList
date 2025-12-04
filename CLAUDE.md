@@ -64,6 +64,36 @@ npm run build
 
 使用 `@/` 指向 `src/` 目录（在 vite.config.ts 和 tsconfig.json 中配置）。
 
+### 响应式设计
+
+支持手机和电脑两种设备，断点为 **768px**：
+
+| 设备 | 宽度 | 特点 |
+|------|------|------|
+| 手机 | ≤768px | Header 按钮收纳为菜单、AI Drawer 全屏、操作按钮始终显示 |
+| 电脑 | >768px | 完整布局 |
+
+**相关文件**：
+- `src/hooks/useMediaQuery.ts` - 响应式 hook（`useIsMobile()`）
+- `src/styles/responsive.css` - 全局媒体查询和 CSS 变量
+
+**CSS 变量**（在 responsive.css 中定义）：
+```css
+--header-padding    /* 手机: 0 12px, 电脑: 0 24px */
+--content-padding   /* 手机: 12px, 电脑: 24px */
+--content-max-width /* 手机: 100%, 电脑: 900px */
+```
+
+**使用方式**：
+```tsx
+import { useIsMobile } from '@/hooks/useMediaQuery'
+
+function MyComponent() {
+  const isMobile = useIsMobile()
+  return <div style={{ width: isMobile ? '100%' : 400 }}>...</div>
+}
+```
+
 ### 前端注意事项
 
 - 后端直接操作文件系统，修改会立即写入对应年份的 TODO 文件
