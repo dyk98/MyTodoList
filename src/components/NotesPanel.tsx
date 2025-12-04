@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button, Modal, Input, Select, message, Spin } from 'antd'
-import { LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { LeftOutlined, RightOutlined, DownOutlined, UpOutlined } from '@ant-design/icons'
 import NoteCard from './NoteCard'
 import { fetchNotes, createNote, updateNote, deleteNote, type Note } from '@/utils/api'
 import { useIsMobile } from '@/hooks/useMediaQuery'
@@ -95,7 +95,7 @@ export default function NotesPanel({ isDemo, showModal, onCloseModal }: NotesPan
       <div className="notes-panel notes-panel-collapsed">
         <Button
           type="text"
-          icon={<LeftOutlined />}
+          icon={isMobile ? <UpOutlined /> : <LeftOutlined />}
           onClick={() => setCollapsed(false)}
           className="notes-panel-toggle"
           title="展开便利贴"
@@ -110,7 +110,7 @@ export default function NotesPanel({ isDemo, showModal, onCloseModal }: NotesPan
         <div className="notes-panel-toggle-container">
           <Button
             type="text"
-            icon={<RightOutlined />}
+            icon={isMobile ? <DownOutlined /> : <RightOutlined />}
             size="small"
             onClick={() => setCollapsed(true)}
             title="收起便利贴"
