@@ -671,17 +671,6 @@ function formatWeekTitle(monday: Date): string {
   return `${format(monday)} - ${format(sunday)}`
 }
 
-// 辅助函数：解析周标题获取周一日期
-function parseWeekTitle(title: string): Date | null {
-  // 格式：X月X日 - X月X日
-  const match = title.match(/(\d+)月(\d+)日\s*-\s*(\d+)月(\d+)日/)
-  if (!match) return null
-  const [, startMonth, startDay] = match
-  const now = new Date()
-  const year = now.getFullYear()
-  return new Date(year, parseInt(startMonth) - 1, parseInt(startDay))
-}
-
 // 周结算：将待办池中已完成的任务移动到当前周区块（需要登录）
 app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -820,19 +809,23 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
       }
     }
 
-    // 4. 找到现有的周区块，确定当前周是否存在
-    const currentMonday = getMonday(new Date())
-    const currentWeekTitle = formatWeekTitle(currentMonday)
+    // 4. 找到现有的周区块，确定是否需要创建新周
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-    // 查找所有周区块
-    const weekBlocks: { title: string; lineIndex: number; monday: Date }[] = []
+    // 查找所有周区块（包含开始和结束日期信息）
+    const weekBlocks: { title: string; lineIndex: number; startDate: Date; endDate: Date }[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       if (isWeekHeader(line)) {
         const title = line.slice(3).trim()
-        const monday = parseWeekTitle(title)
-        if (monday) {
-          weekBlocks.push({ title, lineIndex: i, monday })
+        const match = title.match(/(\d+)月(\d+)日\s*-\s*(\d+)月(\d+)日/)
+        if (match) {
+          const [, startMonth, startDay, endMonth, endDay] = match
+          const year = new Date().getFullYear()
+          const startDate = new Date(year, parseInt(startMonth) - 1, parseInt(startDay))
+          const endDate = new Date(year, parseInt(endMonth) - 1, parseInt(endDay))
+          weekBlocks.push({ title, lineIndex: i, startDate, endDate })
         }
       }
     }
@@ -850,32 +843,42 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
       insertPosition = lines.length
     }
 
-    // 6. 检查是否需要创建缺失的周区块
+    // 6. 检查是否需要创建新的周区块
     let currentWeekLineIndex: number
+    let currentWeekTitle: string
 
     if (weekBlocks.length === 0) {
-      // 没有任何周区块，创建当前周
+      // 没有任何周区块，创建包含今天的周（从今天开始的 7 天）
+      const weekEnd = new Date(today)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      const format = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`
+      currentWeekTitle = `${format(today)} - ${format(weekEnd)}`
       const newWeekBlock = ['', '---', '', `## ${currentWeekTitle}`, '']
       lines.splice(insertPosition, 0, ...newWeekBlock)
       currentWeekLineIndex = insertPosition + 3 // ## 行的位置
     } else {
-      // 找当前周区块
-      const existingCurrentWeek = weekBlocks.find(w => w.title === currentWeekTitle)
+      // 检查今天是否落在某个已存在的周区块内
+      const existingWeek = weekBlocks.find(w => today >= w.startDate && today <= w.endDate)
 
-      if (existingCurrentWeek) {
-        currentWeekLineIndex = existingCurrentWeek.lineIndex
+      if (existingWeek) {
+        currentWeekLineIndex = existingWeek.lineIndex
+        currentWeekTitle = existingWeek.title
       } else {
-        // 当前周不存在，需要创建从最新周到当前周之间的所有缺失周
+        // 今天不在任何已存在的周区块内，需要创建新的周区块
         const latestWeek = weekBlocks[0] // 按文件顺序，第一个是最新的
         const weeksToCreate: string[] = []
 
-        // 从最新周的下一周开始，创建到当前周
-        const nextMonday = new Date(latestWeek.monday)
-        nextMonday.setDate(nextMonday.getDate() + 7)
+        // 从最新周结束日期的下一天开始，创建到包含今天的周
+        const nextStart = new Date(latestWeek.endDate)
+        nextStart.setDate(nextStart.getDate() + 1)
 
-        while (nextMonday <= currentMonday) {
-          weeksToCreate.push(formatWeekTitle(new Date(nextMonday)))
-          nextMonday.setDate(nextMonday.getDate() + 7)
+        while (nextStart <= today) {
+          // 创建从 nextStart 开始的 7 天周区块
+          const weekEnd = new Date(nextStart)
+          weekEnd.setDate(weekEnd.getDate() + 6)
+          const format = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`
+          weeksToCreate.push(`${format(nextStart)} - ${format(weekEnd)}`)
+          nextStart.setDate(nextStart.getDate() + 7)
         }
 
         // 按时间倒序插入（最新的在最前面）
@@ -889,8 +892,9 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
 
         lines.splice(insertPosition, 0, ...newWeekLines)
 
-        // 当前周是第一个插入的
+        // 当前周是第一个插入的（最新的那个）
         currentWeekLineIndex = insertPosition + 3
+        currentWeekTitle = weeksToCreate[0]
       }
     }
 
@@ -967,7 +971,13 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
         const existing = existingProjects.find(p => p.name === projectName)
         if (existing) {
           // 已存在，在该分类末尾追加任务
-          const linesToInsert = tasks.map((taskLine: string) => '    ' + taskLine.trim())
+          // 保留原有层级结构，计算最小缩进并在此基础上增加 4 空格
+          const minIndent = Math.min(...tasks.map((t: string) => t.search(/\S/)).filter((n: number) => n >= 0))
+          const linesToInsert = tasks.map((taskLine: string) => {
+            const currentIndent = taskLine.search(/\S/)
+            const relativeIndent = currentIndent >= 0 ? currentIndent - minIndent : 0
+            return '    ' + ' '.repeat(relativeIndent) + taskLine.trim()
+          })
           insertions.push({ index: existing.endLineIndex, lines: linesToInsert })
           // 更新后续项目的 endLineIndex（因为插入了新行）
           const insertCount = linesToInsert.length
@@ -1008,11 +1018,21 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
       const tasks = tasksByProject[projectName]
       if (projectName) {
         newProjectLines.push(`- [x] ${projectName}`)
+        // 保留原有层级结构，计算最小缩进并在此基础上增加 4 空格
+        const minIndent = Math.min(...tasks.map((t: string) => t.search(/\S/)).filter((n: number) => n >= 0))
         for (const taskLine of tasks) {
-          newProjectLines.push('    ' + taskLine.trim())
+          const currentIndent = taskLine.search(/\S/)
+          const relativeIndent = currentIndent >= 0 ? currentIndent - minIndent : 0
+          newProjectLines.push('    ' + ' '.repeat(relativeIndent) + taskLine.trim())
         }
       } else {
-        newProjectLines.push(...tasks.map((t: string) => t.trim()))
+        // 无项目名的任务，保留原有层级结构
+        const minIndent = Math.min(...tasks.map((t: string) => t.search(/\S/)).filter((n: number) => n >= 0))
+        for (const taskLine of tasks) {
+          const currentIndent = taskLine.search(/\S/)
+          const relativeIndent = currentIndent >= 0 ? currentIndent - minIndent : 0
+          newProjectLines.push(' '.repeat(relativeIndent) + taskLine.trim())
+        }
       }
     }
 
