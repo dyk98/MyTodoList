@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import fs from 'fs/promises'
+import fse from 'fs-extra'
 import path from 'path'
 import { execSync } from 'child_process'
 import multer from 'multer'
@@ -39,6 +39,40 @@ function getNotesFilePath(userEmail: string | null): string {
     return path.join(DEMO_DATA_DIR, 'notes.json')
   }
   return path.join(getUserDataDir(userEmail), 'notes.json')
+}
+
+// 获取用户的 AI 对话历史文件路径
+function getChatHistoryFilePath(userEmail: string | null): string {
+  if (!userEmail) {
+    return path.join(DEMO_DATA_DIR, 'chat-history.json')
+  }
+  return path.join(getUserDataDir(userEmail), 'chat-history.json')
+}
+
+// 确保文件及其目录存在的辅助函数
+async function ensureFileExists(filePath: string, defaultContent: string = ''): Promise<void> {
+  try {
+    await fse.ensureFile(filePath)
+    const stat = await fse.stat(filePath)
+    if (stat.size === 0 && defaultContent) {
+      await safeWriteFile(filePath, defaultContent)
+    }
+  } catch (error) {
+    console.error(`Error ensuring file exists: ${filePath}`, error)
+    throw error
+  }
+}
+
+// 安全读取文件（确保文件存在）
+async function safeReadFile(filePath: string, defaultContent: string = ''): Promise<string> {
+  await ensureFileExists(filePath, defaultContent)
+  return await fse.readFile(filePath, 'utf-8')
+}
+
+// 安全写入文件（确保目录存在）
+async function safeWriteFile(filePath: string, content: string): Promise<void> {
+  await fse.ensureDir(path.dirname(filePath))
+  await fse.writeFile(filePath, content, 'utf-8')
 }
 
 // 获取用户的文档目录
@@ -224,7 +258,7 @@ app.get('/api/years', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userEmail = req.user?.email || null
     const dataDir = userEmail ? getUserDataDir(userEmail) : DEMO_DATA_DIR
-    const files = await fs.readdir(dataDir)
+    const files = await fse.readdir(dataDir)
     const years = files
       .filter(f => /^\d{4}-todo\.md$/.test(f))
       .map(f => parseInt(f.slice(0, 4)))
@@ -241,7 +275,7 @@ app.get('/api/todo', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const userEmail = req.user?.email || null
     const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
     const filePath = getTodoFilePath(userEmail, year)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath, `# ${year} TODO\n\n## 待办池\n\n---\n`)
     res.json({ success: true, content, year: Number(year), isDemo: !userEmail })
   } catch (error) {
     handleError(res, error, 'GET /api/todo')
@@ -257,7 +291,7 @@ app.put('/api/todo', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ success: false, error: 'content is required' })
     }
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    await fs.writeFile(filePath, content, 'utf-8')
+    await safeWriteFile(filePath, content)
     res.json({ success: true })
   } catch (error) {
     handleError(res, error, 'PUT /api/todo')
@@ -274,7 +308,8 @@ app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    await ensureFileExists(filePath, `# ${targetYear} TODO\n\n## 待办池\n\n---\n`)
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -290,7 +325,7 @@ app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ success: false, error: 'Line is not a todo item' })
     }
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'PATCH /api/todo/toggle')
@@ -303,7 +338,7 @@ app.get('/api/weeks', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const userEmail = req.user?.email || null
     const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
     const filePath = getTodoFilePath(userEmail, year)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     const weeks: { title: string; lineIndex: number }[] = []
@@ -333,7 +368,7 @@ app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     let insertIndex = -1
@@ -401,7 +436,7 @@ app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
     const newTask = `- [ ] ${task}`
     lines.splice(insertIndex, 0, newTask)
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/add')
@@ -419,7 +454,7 @@ app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) 
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     if (parentLineIndex < 0 || parentLineIndex >= lines.length) {
@@ -457,7 +492,7 @@ app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) 
     const newSubtask = `${childIndent}- [ ] ${task}`
     lines.splice(insertIndex, 0, newSubtask)
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/add-subtask')
@@ -474,7 +509,7 @@ app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     // 检查是否已存在该分类
@@ -508,7 +543,7 @@ app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
     // 在 --- 分隔线前插入新分类
     lines.splice(separatorIndex, 0, projectHeader, '', PLACEHOLDER_TEXT, '')
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/project/add')
@@ -526,7 +561,7 @@ app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => 
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -560,7 +595,7 @@ app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => 
       lines.splice(linesToDelete[i], 1)
     }
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'DELETE /api/todo/delete')
@@ -578,7 +613,7 @@ app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -598,7 +633,7 @@ app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
 
     lines[lineIndex] = match[1] + newContent.trim()
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'PATCH /api/todo/edit')
@@ -616,7 +651,7 @@ app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     if (fromLineIndex < 0 || fromLineIndex >= lines.length || toLineIndex < 0 || toLineIndex >= lines.length) {
@@ -654,7 +689,7 @@ app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
     // 插入到新位置
     lines.splice(newToIndex, 0, ...linesToMove)
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/reorder')
@@ -686,7 +721,7 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
     const targetYear = year || new Date().getFullYear()
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     let lines = content.split('\n')
 
     // 1. 找到待办池区域，收集已完成的任务
@@ -1048,7 +1083,7 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
       lines.splice(weekEndIndex, 0, ...newProjectLines, '')
     }
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({
       success: true,
       newContent: lines.join('\n'),
@@ -1066,8 +1101,8 @@ app.get('/api/docs', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const userEmail = req.user?.email || null
     const docsDir = getDocsDir(userEmail)
     // 确保 docs 目录存在（兼容旧用户）
-    await fs.mkdir(docsDir, { recursive: true })
-    const files = await fs.readdir(docsDir)
+    await fse.mkdir(docsDir, { recursive: true })
+    const files = await fse.readdir(docsDir)
     const docs = files
       .filter(f => f.endsWith('.md'))
       .map(f => ({
@@ -1091,7 +1126,7 @@ app.get('/api/docs/:filename', optionalAuthMiddleware, async (req: AuthRequest, 
     const userEmail = req.user?.email || null
     const docsDir = getDocsDir(userEmail)
     const filePath = path.join(docsDir, filename)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     res.json({ success: true, content })
   } catch (error) {
     handleError(res, error, 'GET /api/docs/:filename')
@@ -1126,7 +1161,7 @@ app.post('/api/week/add', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await fs.readFile(filePath, 'utf-8')
+    const content = await safeReadFile(filePath)
     const lines = content.split('\n')
 
     // 检查周区块是否已存在（使用精确匹配）
@@ -1154,7 +1189,7 @@ app.post('/api/week/add', authMiddleware, async (req: AuthRequest, res) => {
     const newWeekBlock = ['', '---', '', `## ${weekTitle}`, '']
     lines.splice(insertPosition, 0, ...newWeekBlock)
 
-    await fs.writeFile(filePath, lines.join('\n'), 'utf-8')
+    await safeWriteFile(filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/week/add')
@@ -1225,7 +1260,7 @@ app.get('/api/notes', optionalAuthMiddleware, async (req: AuthRequest, res) => {
     const notesPath = getNotesFilePath(userEmail)
 
     try {
-      const content = await fs.readFile(notesPath, 'utf-8')
+      const content = await safeReadFile(notesPath)
       const notes = JSON.parse(content)
       res.json({ success: true, notes, isDemo: !userEmail })
     } catch (error) {
@@ -1251,7 +1286,7 @@ app.post('/api/notes', authMiddleware, async (req: AuthRequest, res) => {
     // 读取现有便利贴
     let notes = []
     try {
-      const fileContent = await fs.readFile(notesPath, 'utf-8')
+      const fileContent = await safeReadFile(notesPath)
       notes = JSON.parse(fileContent)
     } catch {
       // 文件不存在，从空数组开始
@@ -1270,7 +1305,7 @@ app.post('/api/notes', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     notes.push(newNote)
-    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+    await fse.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
 
     res.json({ success: true, note: newNote })
   } catch (error) {
@@ -1287,7 +1322,7 @@ app.put('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
     const userEmail = req.user!.email
     const notesPath = getNotesFilePath(userEmail)
 
-    const fileContent = await fs.readFile(notesPath, 'utf-8')
+    const fileContent = await safeReadFile(notesPath)
     const notes = JSON.parse(fileContent)
 
     const noteIndex = notes.findIndex((n: { id: string }) => n.id === id)
@@ -1301,7 +1336,7 @@ app.put('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
     if (color !== undefined) notes[noteIndex].color = color
     notes[noteIndex].updatedAt = new Date().toISOString()
 
-    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+    await fse.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
 
     res.json({ success: true, note: notes[noteIndex] })
   } catch (error) {
@@ -1317,7 +1352,7 @@ app.delete('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
     const userEmail = req.user!.email
     const notesPath = getNotesFilePath(userEmail)
 
-    const fileContent = await fs.readFile(notesPath, 'utf-8')
+    const fileContent = await safeReadFile(notesPath)
     let notes = JSON.parse(fileContent)
 
     const originalLength = notes.length
@@ -1327,11 +1362,114 @@ app.delete('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(404).json({ success: false, error: 'Note not found' })
     }
 
-    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+    await fse.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
 
     res.json({ success: true })
   } catch (error) {
     handleError(res, error, 'DELETE /api/notes/:id')
+  }
+})
+
+// ========== AI 对话历史相关 API ==========
+
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+interface ChatSession {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  createdAt: number
+}
+
+// 获取所有对话历史
+app.get('/api/chat-history', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userEmail = req.user?.email || null
+    const historyPath = getChatHistoryFilePath(userEmail)
+
+    try {
+      const content = await safeReadFile(historyPath)
+      const sessions = JSON.parse(content)
+      res.json({ success: true, sessions })
+    } catch (error) {
+      // 文件不存在或解析失败，返回空数组
+      res.json({ success: true, sessions: [] })
+    }
+  } catch (error) {
+    handleError(res, error, 'GET /api/chat-history')
+  }
+})
+
+// 保存对话会话
+app.post('/api/chat-history', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { session } = req.body as { session: ChatSession }
+
+    if (!session || !session.id || !session.messages) {
+      return res.status(400).json({ success: false, error: 'Invalid session data' })
+    }
+
+    const userEmail = req.user?.email || null
+    const historyPath = getChatHistoryFilePath(userEmail)
+
+    // 读取现有历史
+    let sessions: ChatSession[] = []
+    try {
+      const content = await safeReadFile(historyPath)
+      sessions = JSON.parse(content)
+    } catch {
+      // 文件不存在，使用空数组
+    }
+
+    // 检查是否已存在该会话
+    const existingIndex = sessions.findIndex((s: ChatSession) => s.id === session.id)
+    if (existingIndex >= 0) {
+      // 更新现有会话
+      sessions[existingIndex] = session
+    } else {
+      // 添加新会话到开头
+      sessions.unshift(session)
+    }
+
+    // 限制最多保存 100 个会话
+    if (sessions.length > 100) {
+      sessions = sessions.slice(0, 100)
+    }
+
+    await fse.writeFile(historyPath, JSON.stringify(sessions, null, 2), 'utf-8')
+
+    res.json({ success: true, session })
+  } catch (error) {
+    handleError(res, error, 'POST /api/chat-history')
+  }
+})
+
+// 删除对话会话
+app.delete('/api/chat-history/:id', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params
+
+    const userEmail = req.user?.email || null
+    const historyPath = getChatHistoryFilePath(userEmail)
+
+    const fileContent = await safeReadFile(historyPath)
+    let sessions = JSON.parse(fileContent)
+
+    const originalLength = sessions.length
+    sessions = sessions.filter((s: ChatSession) => s.id !== id)
+
+    if (sessions.length === originalLength) {
+      return res.status(404).json({ success: false, error: 'Session not found' })
+    }
+
+    await fse.writeFile(historyPath, JSON.stringify(sessions, null, 2), 'utf-8')
+
+    res.json({ success: true })
+  } catch (error) {
+    handleError(res, error, 'DELETE /api/chat-history/:id')
   }
 })
 

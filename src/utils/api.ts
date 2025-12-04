@@ -353,6 +353,13 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ChatSession {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  createdAt: number
+}
+
 export async function aiChat(message: string, history: ChatMessage[] = [], year?: number): Promise<string> {
   const res = await fetch(`${BASE_URL}/ai/chat`, {
     method: 'POST',
@@ -364,6 +371,44 @@ export async function aiChat(message: string, history: ChatMessage[] = [], year?
     throw new Error(data.error || 'Failed to chat with AI')
   }
   return data.reply
+}
+
+// 获取对话历史
+export async function fetchChatHistory(): Promise<ChatSession[]> {
+  const res = await fetch(`${BASE_URL}/chat-history`, {
+    headers: getAuthHeaders(),
+  })
+  const data = await res.json() as { success: boolean; sessions?: ChatSession[]; error?: string }
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch chat history')
+  }
+  return data.sessions || []
+}
+
+// 保存对话会话
+export async function saveChatSession(session: ChatSession): Promise<ChatSession> {
+  const res = await fetch(`${BASE_URL}/chat-history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ session }),
+  })
+  const data = await res.json() as { success: boolean; session?: ChatSession; error?: string }
+  if (!data.success || !data.session) {
+    throw new Error(data.error || 'Failed to save chat session')
+  }
+  return data.session
+}
+
+// 删除对话会话
+export async function deleteChatSession(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/chat-history/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  })
+  const data = await res.json() as { success: boolean; error?: string }
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to delete chat session')
+  }
 }
 
 // ========== 便利贴相关 API ==========
