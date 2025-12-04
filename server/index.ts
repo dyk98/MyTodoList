@@ -1037,6 +1037,8 @@ app.get('/api/docs', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userEmail = req.user?.email || null
     const docsDir = getDocsDir(userEmail)
+    // 确保 docs 目录存在（兼容旧用户）
+    await fs.mkdir(docsDir, { recursive: true })
     const files = await fs.readdir(docsDir)
     const docs = files
       .filter(f => f.endsWith('.md'))
