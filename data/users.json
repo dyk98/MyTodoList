@@ -29,6 +29,12 @@
       "passwordHash": "$2b$10$pTUhTx1TiqI3n.TvQSUlZubRsRlSw3UVjehMuJnA8lQMm8cIkzibC",
       "createdAt": "2025-12-03T05:22:14.761Z",
       "isAdmin": false
+    },
+    {
+      "email": "melodytu@tencent.com",
+      "passwordHash": "$2b$10$311Ern0Gwszk2JMM9dS6jeOIsIy1.oIjSmWFiCxwG5HxgHzFcmFny",
+      "createdAt": "2025-12-04T04:25:13.322Z",
+      "isAdmin": false
     }
   ]
 }
