@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
-import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined } from '@ant-design/icons'
+import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
+import NotesPanel from '@/components/NotesPanel'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
@@ -28,6 +29,9 @@ function App() {
   // 认证相关状态
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+
+  // 便利贴相关状态
+  const [noteModalOpen, setNoteModalOpen] = useState(false)
 
   // 加载年份列表和文档列表
   useEffect(() => {
@@ -228,6 +232,13 @@ function App() {
   const mobileMenuItems = [
     ...(!isDemo ? [
       {
+        key: 'addNote',
+        label: '新增便利贴',
+        icon: <PushpinOutlined />,
+        onClick: () => setNoteModalOpen(true),
+      },
+      { type: 'divider' as const, key: 'divider0' },
+      {
         key: 'addWeek',
         label: '新增周',
         icon: <PlusOutlined />,
@@ -267,14 +278,14 @@ function App() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ background: '#fff', padding: 'var(--header-padding)', borderBottom: '1px solid #f0f0f0' }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <Space>
-            <Title level={3} style={{ margin: '16px 0', fontSize: isMobile ? 18 : 24 }}>TODO List</Title>
-            {isDemo && (
-              <Tag color="orange">试用</Tag>
-            )}
-          </Space>
+        <Header style={{ background: '#fff', padding: 'var(--header-padding)', borderBottom: '1px solid #f0f0f0' }}>
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Space>
+              <Title level={3} style={{ margin: '16px 0', fontSize: isMobile ? 18 : 24 }}>TODO List</Title>
+              {isDemo && (
+                <Tag color="orange">试用</Tag>
+              )}
+            </Space>
           <Space size={isMobile ? 4 : 8}>
             {isMobile ? (
               // 移动端：收纳为菜单
@@ -286,6 +297,12 @@ function App() {
               <>
                 {!isDemo && (
                   <>
+                    <Button
+                      icon={<PushpinOutlined />}
+                      onClick={() => setNoteModalOpen(true)}
+                    >
+                      便利贴
+                    </Button>
                     <Button
                       icon={<PlusOutlined />}
                       onClick={handleAddWeek}
@@ -438,6 +455,13 @@ function App() {
       <SettingsModal
         open={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
+      />
+
+      {/* 便利贴面板 - 浮动在右侧 */}
+      <NotesPanel
+        isDemo={isDemo}
+        showModal={noteModalOpen}
+        onCloseModal={() => setNoteModalOpen(false)}
       />
     </Layout>
   )

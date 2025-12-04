@@ -33,6 +33,14 @@ function getTodoFilePath(userEmail: string | null, year: number | string): strin
   return path.join(getUserDataDir(userEmail), `${year}-todo.md`)
 }
 
+// 获取用户的便利贴文件路径
+function getNotesFilePath(userEmail: string | null): string {
+  if (!userEmail) {
+    return path.join(DEMO_DATA_DIR, 'notes.json')
+  }
+  return path.join(getUserDataDir(userEmail), 'notes.json')
+}
+
 // 获取用户的文档目录
 function getDocsDir(userEmail: string | null): string {
   if (!userEmail) {
@@ -1205,6 +1213,125 @@ app.post('/api/ai/chat', optionalAuthMiddleware, async (req: AuthRequest, res) =
     res.json({ success: true, reply: result.trim() })
   } catch (error) {
     handleError(res, error, 'POST /api/ai/chat')
+  }
+})
+
+// ========== 便利贴相关 API ==========
+
+// 获取所有便利贴
+app.get('/api/notes', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userEmail = req.user?.email || null
+    const notesPath = getNotesFilePath(userEmail)
+
+    try {
+      const content = await fs.readFile(notesPath, 'utf-8')
+      const notes = JSON.parse(content)
+      res.json({ success: true, notes, isDemo: !userEmail })
+    } catch (error) {
+      // 文件不存在或解析失败，返回空数组
+      res.json({ success: true, notes: [], isDemo: !userEmail })
+    }
+  } catch (error) {
+    handleError(res, error, 'GET /api/notes')
+  }
+})
+
+// 创建便利贴
+app.post('/api/notes', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { title, content, color } = req.body
+    if (!title) {
+      return res.status(400).json({ success: false, error: 'title is required' })
+    }
+
+    const userEmail = req.user!.email
+    const notesPath = getNotesFilePath(userEmail)
+
+    // 读取现有便利贴
+    let notes = []
+    try {
+      const fileContent = await fs.readFile(notesPath, 'utf-8')
+      notes = JSON.parse(fileContent)
+    } catch {
+      // 文件不存在，从空数组开始
+      notes = []
+    }
+
+    // 创建新便利贴
+    const now = new Date().toISOString()
+    const newNote = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      title: title || '无标题',
+      content: content || '',
+      color: color || 'yellow',
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    notes.push(newNote)
+    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+
+    res.json({ success: true, note: newNote })
+  } catch (error) {
+    handleError(res, error, 'POST /api/notes')
+  }
+})
+
+// 更新便利贴
+app.put('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params
+    const { title, content, color } = req.body
+
+    const userEmail = req.user!.email
+    const notesPath = getNotesFilePath(userEmail)
+
+    const fileContent = await fs.readFile(notesPath, 'utf-8')
+    const notes = JSON.parse(fileContent)
+
+    const noteIndex = notes.findIndex((n: { id: string }) => n.id === id)
+    if (noteIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Note not found' })
+    }
+
+    // 更新便利贴
+    if (title !== undefined) notes[noteIndex].title = title
+    if (content !== undefined) notes[noteIndex].content = content
+    if (color !== undefined) notes[noteIndex].color = color
+    notes[noteIndex].updatedAt = new Date().toISOString()
+
+    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+
+    res.json({ success: true, note: notes[noteIndex] })
+  } catch (error) {
+    handleError(res, error, 'PUT /api/notes/:id')
+  }
+})
+
+// 删除便利贴
+app.delete('/api/notes/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params
+
+    const userEmail = req.user!.email
+    const notesPath = getNotesFilePath(userEmail)
+
+    const fileContent = await fs.readFile(notesPath, 'utf-8')
+    let notes = JSON.parse(fileContent)
+
+    const originalLength = notes.length
+    notes = notes.filter((n: { id: string }) => n.id !== id)
+
+    if (notes.length === originalLength) {
+      return res.status(404).json({ success: false, error: 'Note not found' })
+    }
+
+    await fs.writeFile(notesPath, JSON.stringify(notes, null, 2), 'utf-8')
+
+    res.json({ success: true })
+  } catch (error) {
+    handleError(res, error, 'DELETE /api/notes/:id')
   }
 })
 

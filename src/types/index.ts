@@ -36,3 +36,16 @@ export interface ApiResponse<T = unknown> {
   newContent?: string
   data?: T
 }
+
+// 便利贴颜色类型
+export type NoteColor = 'yellow' | 'pink' | 'green' | 'blue' | 'purple'
+
+// 便利贴
+export interface Note {
+  id: string
+  title: string
+  content: string
+  color: NoteColor
+  createdAt: string
+  updatedAt: string
+}

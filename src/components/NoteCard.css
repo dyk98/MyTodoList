@@ -1,0 +1,146 @@
+.note-card {
+  margin-bottom: 20px;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 4px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  transform: rotate(-1deg);
+  position: relative;
+}
+
+.note-card:nth-child(even) {
+  transform: rotate(1deg);
+}
+
+.note-card:hover {
+  transform: rotate(0deg) scale(1.02);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.15),
+    0 6px 16px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+.note-card .ant-card-head {
+  border: none !important;
+  padding: 12px 16px 8px;
+  min-height: auto;
+}
+
+.note-card .ant-card-body {
+  padding: 8px 16px 16px;
+}
+
+.note-card-title {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+  font-family: 'Marker Felt', 'Comic Sans MS', cursive;
+}
+
+.note-card-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.note-card:hover .note-card-actions {
+  opacity: 1;
+}
+
+.note-card-actions .ant-btn {
+  padding: 0 4px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.note-card-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 80px;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.8;
+  font-size: 14px;
+  color: #444;
+  font-family: 'Marker Felt', 'Comic Sans MS', cursive;
+}
+
+.note-card-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.note-card-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.note-card-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.note-card-empty {
+  color: #999;
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* 便利贴颜色 - 真实便利贴效果 */
+.note-card-yellow .ant-card-head {
+  background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+}
+
+.note-card-yellow .ant-card-body {
+  background: linear-gradient(135deg, #fffde7 0%, #fff9c4 100%);
+}
+
+.note-card-pink .ant-card-head {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+}
+
+.note-card-pink .ant-card-body {
+  background: linear-gradient(135deg, #fff0f5 0%, #fce4ec 100%);
+}
+
+.note-card-green .ant-card-head {
+  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+}
+
+.note-card-green .ant-card-body {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+}
+
+.note-card-blue .ant-card-head {
+  background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+}
+
+.note-card-blue .ant-card-body {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.note-card-purple .ant-card-head {
+  background: linear-gradient(135deg, #e1bee7 0%, #ce93d8 100%);
+}
+
+.note-card-purple .ant-card-body {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+/* 便利贴顶部胶带效果 */
+.note-card::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}

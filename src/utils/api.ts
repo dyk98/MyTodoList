@@ -365,3 +365,73 @@ export async function aiChat(message: string, history: ChatMessage[] = [], year?
   }
   return data.reply
 }
+
+// ========== 便利贴相关 API ==========
+
+export interface Note {
+  id: string
+  title: string
+  content: string
+  color: 'yellow' | 'pink' | 'green' | 'blue' | 'purple'
+  createdAt: string
+  updatedAt: string
+}
+
+// 获取所有便利贴
+export async function fetchNotes(): Promise<Note[]> {
+  const res = await fetch(`${BASE_URL}/notes`, {
+    headers: getAuthHeaders(),
+  })
+  const data = await res.json() as { success: boolean; notes?: Note[]; error?: string }
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch notes')
+  }
+  return data.notes || []
+}
+
+// 创建便利贴
+export async function createNote(
+  title: string,
+  content?: string,
+  color?: Note['color']
+): Promise<Note> {
+  const res = await fetch(`${BASE_URL}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ title, content, color }),
+  })
+  const data = await res.json() as { success: boolean; note?: Note; error?: string }
+  if (!data.success || !data.note) {
+    throw new Error(data.error || 'Failed to create note')
+  }
+  return data.note
+}
+
+// 更新便利贴
+export async function updateNote(
+  id: string,
+  updates: { title?: string; content?: string; color?: Note['color'] }
+): Promise<Note> {
+  const res = await fetch(`${BASE_URL}/notes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(updates),
+  })
+  const data = await res.json() as { success: boolean; note?: Note; error?: string }
+  if (!data.success || !data.note) {
+    throw new Error(data.error || 'Failed to update note')
+  }
+  return data.note
+}
+
+// 删除便利贴
+export async function deleteNote(id: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/notes/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  })
+  const data = await res.json() as { success: boolean; error?: string }
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to delete note')
+  }
+}
