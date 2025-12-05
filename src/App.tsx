@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Layout, Typography, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
+import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
 import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { ParsedTodo } from '@/types'
 
 const { Header, Content } = Layout
-const { Title } = Typography
 
 function App() {
   const { user, loading: authLoading, isDemo, logout } = useAuth()
@@ -281,7 +280,7 @@ function App() {
         <Header style={{ background: '#fff', padding: 'var(--header-padding)', borderBottom: '1px solid #f0f0f0' }}>
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Space>
-              <Title level={3} style={{ margin: '16px 0', fontSize: isMobile ? 18 : 24 }}>TODO List</Title>
+              <img src="/logo.png" alt="TickGo" style={{ height: isMobile ? 28 : 36, marginTop: 12 }} />
               {isDemo && (
                 <Tag color="orange">试用</Tag>
               )}

@@ -19,7 +19,7 @@ import {
 } from './auth.js'
 
 const app = express()
-const PORT = 3334
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3334
 
 // 项目根目录
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..')
@@ -1476,7 +1476,22 @@ app.delete('/api/chat-history/:id', optionalAuthMiddleware, async (req: AuthRequ
 // 数据目录（用于日志输出）
 const DATA_DIR = path.resolve(import.meta.dirname, '../data')
 
+// 生产环境：提供前端静态文件
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.resolve(PROJECT_ROOT, 'dist')
+  console.log(`Serving static files from: ${distPath}`)
+
+  // 提供静态文件
+  app.use(express.static(distPath))
+
+  // 所有非 API 路由返回 index.html（支持前端路由）
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`)
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
   console.log(`Data directory: ${DATA_DIR}`)
 })

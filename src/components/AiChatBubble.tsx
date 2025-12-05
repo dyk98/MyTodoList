@@ -285,7 +285,7 @@ export function AiChatBubble({ currentYear, onRefresh }: Props) {
               {messages.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#999', marginTop: 100 }}>
                   <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                  <p>你好！我是 TODO 管理助手</p>
+                  <p>你好！我是 TickGo 助手</p>
                   <p style={{ fontSize: 12 }}>试试说：「今天完成了 xxx」或「记录一个新任务：xxx」</p>
                 </div>
               ) : (
