@@ -80,6 +80,7 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
           alignItems: 'flex-start',
           gap: 8,
           padding: '4px 0',
+          position: 'relative',
         }}
         className="todo-item-row"
       >
@@ -121,35 +122,37 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
               {item.content}
             </Text>
             {!readOnly && (
-              <Space size={4} className="todo-item-actions" style={{ opacity: 0, transition: 'opacity 0.2s' }}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => setAddingSubtask(true)}
-                  title="添加子任务"
-                />
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => setEditing(true)}
-                />
-                <Popconfirm
-                  title="确定删除此任务？"
-                  description={item.children.length > 0 ? '子任务也会一并删除' : undefined}
-                  onConfirm={handleDelete}
-                  okText="删除"
-                  cancelText="取消"
-                >
+              <div className="todo-item-actions-bubble">
+                <Space size={4}>
                   <Button
                     type="text"
                     size="small"
-                    danger
-                    icon={<DeleteOutlined />}
+                    icon={<PlusOutlined />}
+                    onClick={() => setAddingSubtask(true)}
+                    title="添加子任务"
                   />
-                </Popconfirm>
-              </Space>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => setEditing(true)}
+                  />
+                  <Popconfirm
+                    title="确定删除此任务？"
+                    description={item.children.length > 0 ? '子任务也会一并删除' : undefined}
+                    onConfirm={handleDelete}
+                    okText="删除"
+                    cancelText="取消"
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                    />
+                  </Popconfirm>
+                </Space>
+              </div>
             )}
           </>
         )}
@@ -187,8 +190,25 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
         </div>
       )}
       <style>{`
-        .todo-item-row:hover .todo-item-actions {
-          opacity: 1 !important;
+        .todo-item-actions-bubble {
+          position: absolute;
+          left: 0;
+          top: -8px;
+          background: white;
+          border: 1px solid #d9d9d9;
+          border-radius: 8px;
+          padding: 4px 8px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s, transform 0.2s;
+          transform: translateY(-4px);
+          z-index: 10;
+        }
+        .todo-item-row:hover .todo-item-actions-bubble {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateY(0);
         }
       `}</style>
     </div>
