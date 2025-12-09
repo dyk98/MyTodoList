@@ -33,6 +33,8 @@
   border-radius: 50%;
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  padding: 0 !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
@@ -43,6 +45,10 @@
 
 .notes-panel-collapse-btn:hover {
   opacity: 1;
+}
+
+.notes-panel-collapse-btn .anticon {
+  font-size: 14px;
 }
 
 .notes-panel-content {
@@ -87,6 +93,8 @@
 .notes-panel-toggle {
   width: 40px;
   height: 40px;
+  min-width: 40px;
+  padding: 0 !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -94,6 +102,16 @@
   background: #fff;
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.notes-panel-toggle:hover {
+  opacity: 1;
+}
+
+.notes-panel-toggle .anticon {
+  font-size: 16px;
 }
 
 @media (max-width: 768px) {
