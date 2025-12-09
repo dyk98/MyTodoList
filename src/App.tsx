@@ -32,6 +32,10 @@ function App() {
   // 便利贴相关状态
   const [noteModalOpen, setNoteModalOpen] = useState(false)
 
+  // 新增周相关状态
+  const [addWeekModalOpen, setAddWeekModalOpen] = useState(false)
+  const [weekTitleInput, setWeekTitleInput] = useState('')
+
   // 加载年份列表和文档列表
   useEffect(() => {
     fetchYears().then(setYears).catch(console.error)
@@ -150,37 +154,25 @@ function App() {
 
   // 新增周区块
   const handleAddWeek = () => {
-    let weekTitleInput = ''
+    setWeekTitleInput('')
+    setAddWeekModalOpen(true)
+  }
 
-    Modal.confirm({
-      title: '新增周区块',
-      content: (
-        <div>
-          <p style={{ marginBottom: 8 }}>输入周区块标题（格式：X月X日 - X月X日）</p>
-          <Input
-            placeholder="例如：12月9日 - 12月15日"
-            onChange={(e) => { weekTitleInput = e.target.value }}
-          />
-        </div>
-      ),
-      okText: '创建',
-      cancelText: '取消',
-      onOk: async () => {
-        if (!weekTitleInput.trim()) {
-          message.warning('请输入周区块标题')
-          return Promise.reject()
-        }
-        try {
-          const newContent = await addWeek(weekTitleInput.trim(), currentYear)
-          const parsed = parseTodoMd(newContent)
-          setData(parsed)
-          message.success(`周区块「${weekTitleInput}」创建成功`)
-        } catch (e) {
-          message.error(String(e))
-          return Promise.reject()
-        }
-      },
-    })
+  const handleAddWeekConfirm = async () => {
+    if (!weekTitleInput.trim()) {
+      message.warning('请输入周区块标题')
+      return
+    }
+    try {
+      const newContent = await addWeek(weekTitleInput.trim(), currentYear)
+      const parsed = parseTodoMd(newContent)
+      setData(parsed)
+      message.success(`周区块「${weekTitleInput}」创建成功`)
+      setAddWeekModalOpen(false)
+      setWeekTitleInput('')
+    } catch (e) {
+      message.error(String(e))
+    }
   }
 
   // 文档上传
@@ -455,6 +447,26 @@ function App() {
         open={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
+
+      {/* 新增周区块模态框 */}
+      <Modal
+        title="新增周区块"
+        open={addWeekModalOpen}
+        onOk={handleAddWeekConfirm}
+        onCancel={() => setAddWeekModalOpen(false)}
+        okText="创建"
+        cancelText="取消"
+      >
+        <div>
+          <p style={{ marginBottom: 8 }}>输入周区块标题（格式：X月X日 - X月X日）</p>
+          <Input
+            placeholder="例如：12月9日 - 12月15日"
+            value={weekTitleInput}
+            onChange={(e) => setWeekTitleInput(e.target.value)}
+            onPressEnter={handleAddWeekConfirm}
+          />
+        </div>
+      </Modal>
 
       {/* 便利贴面板 - 浮动在右侧 */}
       <NotesPanel
