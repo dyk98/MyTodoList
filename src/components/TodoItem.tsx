@@ -192,8 +192,8 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
       <style>{`
         .todo-item-actions-bubble {
           position: absolute;
-          left: 0;
-          top: -8px;
+          left: 40px;
+          top: -40px;
           background: white;
           border: 1px solid #d9d9d9;
           border-radius: 8px;
@@ -202,7 +202,7 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
           opacity: 0;
           pointer-events: none;
           transition: opacity 0.2s, transform 0.2s;
-          transform: translateY(-4px);
+          transform: translateY(4px);
           z-index: 10;
         }
         .todo-item-row:hover .todo-item-actions-bubble {

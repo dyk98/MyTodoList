@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
+import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag, App as AntApp } from 'antd'
 import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
@@ -12,6 +12,7 @@ import type { ParsedTodo } from '@/types'
 const { Header, Content } = Layout
 
 function App() {
+  const { modal } = AntApp.useApp()
   const { user, loading: authLoading, isDemo, logout } = useAuth()
   const isMobile = useIsMobile()
   const [data, setData] = useState<ParsedTodo | null>(null)
@@ -129,7 +130,7 @@ function App() {
 
   // 周结算
   const handleWeekSettle = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '周结算',
       content: (
         <div>
@@ -349,7 +350,7 @@ function App() {
                       icon: <LogoutOutlined />,
                       danger: true,
                       onClick: () => {
-                        Modal.confirm({
+                        modal.confirm({
                           title: '确认退出登录？',
                           okText: '退出',
                           cancelText: '取消',
