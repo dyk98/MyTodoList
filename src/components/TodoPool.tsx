@@ -40,6 +40,10 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
   const [addingProject, setAddingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
 
+  // 项目快速添加任务相关状态
+  const [quickAddingProject, setQuickAddingProject] = useState<string | null>(null)
+  const [quickTaskInput, setQuickTaskInput] = useState('')
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -88,6 +92,22 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
       setNewProjectName('')
       setAddingProject(false)
       message.success('分类添加成功')
+    } catch (e) {
+      message.error('添加失败: ' + String(e))
+    }
+  }
+
+  // 快速添加任务到指定项目
+  const handleQuickAdd = async (projectName: string) => {
+    if (!quickTaskInput.trim()) {
+      message.warning('请输入任务内容')
+      return
+    }
+    try {
+      await onAdd(quickTaskInput.trim(), projectName, undefined)
+      setQuickTaskInput('')
+      setQuickAddingProject(null)
+      message.success('添加成功')
     } catch (e) {
       message.error('添加失败: ' + String(e))
     }
@@ -149,10 +169,26 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
     .map((project) => ({
       key: project.name,
       label: (
-        <Space>
-          <span>{project.name}</span>
-          <Badge count={countPending(project.items)} size="small" />
-        </Space>
+        <div className="project-header" style={{ position: 'relative' }}>
+          <Space>
+            <span>{project.name}</span>
+            <Badge count={countPending(project.items)} size="small" />
+          </Space>
+          {!readOnly && (
+            <div className="project-quick-add-bubble">
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setQuickAddingProject(project.name)
+                }}
+                title="快速添加任务"
+              />
+            </div>
+          )}
+        </div>
       ),
       children: (
         <DndContext
@@ -242,6 +278,30 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
           </Space>
         </div>
       )}
+
+      {/* 快速添加任务的输入框 */}
+      {!readOnly && quickAddingProject && (
+        <div style={{ marginBottom: 16, padding: 12, background: '#e6f7ff', borderRadius: 8, border: '1px solid #91d5ff' }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div style={{ marginBottom: 8, fontWeight: 500, color: '#1890ff' }}>
+              快速添加到「{quickAddingProject}」
+            </div>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                placeholder="输入任务内容"
+                value={quickTaskInput}
+                onChange={(e) => setQuickTaskInput(e.target.value)}
+                onPressEnter={() => handleQuickAdd(quickAddingProject)}
+                onKeyDown={(e) => e.key === 'Escape' && setQuickAddingProject(null)}
+                autoFocus
+              />
+              <Button type="primary" onClick={() => handleQuickAdd(quickAddingProject)}>添加</Button>
+              <Button onClick={() => { setQuickAddingProject(null); setQuickTaskInput('') }}>取消</Button>
+            </Space.Compact>
+          </Space>
+        </div>
+      )}
+
       <Collapse
         items={collapseItems}
         defaultActiveKey={projects.filter(p => p.items.length > 0).map(p => p.name)}
@@ -264,6 +324,45 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
           autoFocus
         />
       </Modal>
+
+      <style>{`
+        .project-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .project-quick-add-bubble {
+          position: absolute;
+          left: -8px;
+          top: -36px;
+          background: white;
+          border: 1px solid #d9d9d9;
+          border-radius: 8px;
+          padding: 2px 4px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s, transform 0.2s;
+          transform: translateY(4px);
+          z-index: 10;
+        }
+        .project-quick-add-bubble:hover,
+        .project-header:hover .project-quick-add-bubble {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateY(0);
+        }
+        /* 创建一个不可见的桥接区域 */
+        .project-quick-add-bubble::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 100%;
+          height: 8px;
+          background: transparent;
+        }
+      `}</style>
     </Card>
   )
 }
