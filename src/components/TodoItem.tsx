@@ -104,7 +104,6 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
             <Input
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
-              onPressEnter={handleSaveEdit}
               onKeyDown={(e) => e.key === 'Escape' && handleCancelEdit()}
               autoFocus
               size="small"
@@ -164,7 +163,6 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
               placeholder="输入子任务内容"
               value={subtaskValue}
               onChange={(e) => setSubtaskValue(e.target.value)}
-              onPressEnter={handleAddSubtask}
               onKeyDown={(e) => e.key === 'Escape' && setAddingSubtask(false)}
               autoFocus
               size="small"

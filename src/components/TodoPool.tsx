@@ -1,5 +1,5 @@
 import { Card, Collapse, Badge, Button, Input, Select, Space, message, Modal } from 'antd'
-import { PlusOutlined, FolderAddOutlined } from '@ant-design/icons'
+import { PlusOutlined, FolderAddOutlined, FileMarkdownOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import {
   DndContext,
@@ -24,13 +24,14 @@ interface Props {
   onAdd: (task: string, project: string, weekLineIndex?: number) => Promise<void>
   onProjectAdd: (name: string) => Promise<void>
   onReorder: (fromLineIndex: number, toLineIndex: number) => Promise<void>
+  onEditMarkdown?: () => void
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
   onAddSubtask?: (parentLineIndex: number, task: string) => Promise<void>
   readOnly?: boolean
 }
 
-export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onReorder, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
+export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onReorder, onEditMarkdown, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('')
@@ -230,6 +231,13 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
         !readOnly && (
           <Space>
             <Button
+              icon={<FileMarkdownOutlined />}
+              size="small"
+              onClick={onEditMarkdown}
+            >
+              Markdown 编辑
+            </Button>
+            <Button
               icon={<FolderAddOutlined />}
               size="small"
               onClick={() => setAddingProject(true)}
@@ -255,7 +263,6 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
               placeholder="输入任务内容"
               value={newTask}
               onChange={(e) => setNewTask(e.target.value)}
-              onPressEnter={handleAdd}
               autoFocus
             />
             <Space wrap>
@@ -291,7 +298,6 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
                 placeholder="输入任务内容"
                 value={quickTaskInput}
                 onChange={(e) => setQuickTaskInput(e.target.value)}
-                onPressEnter={() => handleQuickAdd(quickAddingProject)}
                 onKeyDown={(e) => e.key === 'Escape' && setQuickAddingProject(null)}
                 autoFocus
               />
@@ -320,7 +326,6 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
           placeholder="输入分类名称"
           value={newProjectName}
           onChange={(e) => setNewProjectName(e.target.value)}
-          onPressEnter={handleAddProject}
           autoFocus
         />
       </Modal>
