@@ -632,6 +632,165 @@ function formatWeekTitle(monday) {
     const format = (d) => `${d.getMonth() + 1}月${d.getDate()}日`;
     return `${format(monday)} - ${format(sunday)}`;
 }
+// 获取缩进层级（每 4 个空格 = 1 级）
+function getIndentLevel(line) {
+    const match = line.match(/^(\s*)/);
+    return match ? Math.floor(match[1].length / 4) : 0;
+}
+// 构建任务树：扫描待办池，返回按项目分组的任务树
+function buildTaskTreeFromPool(lines) {
+    const projectTrees = new Map();
+    let currentProject = '';
+    let inPool = false;
+    const stack = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // 检测待办池边界
+        if (line.trim() === '## 待办池') {
+            inPool = true;
+            continue;
+        }
+        if (inPool && isSeparator(line)) {
+            break; // 待办池结束
+        }
+        // 检测项目标题
+        if (inPool && isProjectHeader(line)) {
+            currentProject = line.slice(4).trim();
+            stack.length = 0; // 清空栈
+            if (!projectTrees.has(currentProject)) {
+                projectTrees.set(currentProject, []);
+            }
+            continue;
+        }
+        // 跳过占位文本
+        if (inPool && isPlaceholder(line)) {
+            continue;
+        }
+        // 解析任务行
+        if (inPool && isTaskLine(line)) {
+            const indent = getIndentLevel(line);
+            const completed = isCompletedTask(line);
+            const meta = {
+                lineIndex: i,
+                indent,
+                completed,
+                originalLine: line,
+                hasCompletedDescendants: false,
+                hasIncompleteDescendants: false,
+                shouldArchive: false,
+                shouldDelete: false,
+            };
+            const node = { meta, children: [] };
+            // 找到父节点（栈中最后一个缩进小于当前的节点）
+            while (stack.length > 0 && stack[stack.length - 1].meta.indent >= indent) {
+                stack.pop();
+            }
+            if (stack.length === 0) {
+                // 根节点
+                if (currentProject && projectTrees.has(currentProject)) {
+                    projectTrees.get(currentProject).push(node);
+                }
+            }
+            else {
+                // 子节点
+                const parent = stack[stack.length - 1];
+                parent.children.push(node);
+            }
+            stack.push(node);
+        }
+    }
+    return projectTrees;
+}
+// 递归标记任务状态（自底向上）
+function markTaskStatus(node) {
+    // 递归处理所有子节点
+    for (const child of node.children) {
+        markTaskStatus(child);
+    }
+    // 统计子节点状态
+    let hasCompletedChild = false;
+    let hasIncompleteChild = false;
+    for (const child of node.children) {
+        if (child.meta.completed || child.meta.hasCompletedDescendants) {
+            hasCompletedChild = true;
+        }
+        if (!child.meta.completed || child.meta.hasIncompleteDescendants) {
+            hasIncompleteChild = true;
+        }
+    }
+    // 更新当前节点的后代状态
+    node.meta.hasCompletedDescendants = node.meta.completed || hasCompletedChild;
+    node.meta.hasIncompleteDescendants = hasIncompleteChild;
+    // 决策：归档、删除
+    if (node.meta.hasCompletedDescendants) {
+        node.meta.shouldArchive = true; // 自己或后代有完成 → 需要归档
+    }
+    if (node.meta.completed && !node.meta.hasIncompleteDescendants) {
+        node.meta.shouldDelete = true; // 自己完成且无未完成后代 → 完全删除
+    }
+}
+// 构建归档内容（递归）
+function buildArchiveLines(node, baseIndent) {
+    const lines = [];
+    if (!node.meta.shouldArchive) {
+        return lines;
+    }
+    // 计算当前行的缩进
+    const indentStr = '    '.repeat(baseIndent);
+    // 父任务在归档中显示为 [x]
+    const taskContent = node.meta.originalLine.trim().replace(/^- \[.\]/, '- [x]');
+    lines.push(indentStr + taskContent);
+    // 递归处理子节点
+    for (const child of node.children) {
+        if (child.meta.completed || child.meta.hasCompletedDescendants) {
+            // 已完成或有已完成后代 → 继续归档
+            lines.push(...buildArchiveLines(child, baseIndent + 1));
+        }
+    }
+    return lines;
+}
+// 构建待办池保留内容（递归）
+function buildRetainedLines(node) {
+    const lines = [];
+    if (node.meta.shouldDelete) {
+        return []; // 完全删除，不返回任何内容
+    }
+    // 保留父任务（强制改为 [ ]）
+    const taskContent = node.meta.originalLine.replace(/^(\s*)- \[.\]/, '$1- [ ]');
+    lines.push(taskContent);
+    // 递归保留未完成的子任务
+    for (const child of node.children) {
+        if (!child.meta.shouldDelete) {
+            lines.push(...buildRetainedLines(child));
+        }
+    }
+    return lines;
+}
+// 替换待办池内容
+function replacePoolInLines(lines, newPoolContent) {
+    let poolStartIndex = -1;
+    let poolEndIndex = -1;
+    // 找到待办池的起始和结束位置
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === '## 待办池') {
+            poolStartIndex = i;
+        }
+        if (poolStartIndex !== -1 && isSeparator(lines[i])) {
+            poolEndIndex = i;
+            break;
+        }
+    }
+    if (poolStartIndex === -1) {
+        throw new Error('找不到待办池区域');
+    }
+    // 删除旧的待办池内容（保留分隔线）
+    const result = [
+        ...lines.slice(0, poolStartIndex),
+        ...newPoolContent,
+        ...lines.slice(poolEndIndex),
+    ];
+    return result;
+}
 // 周结算：将待办池中已完成的任务移动到当前周区块（需要登录）
 app.post('/api/todo/week-settle', authMiddleware, async (req, res) => {
     try {
@@ -640,122 +799,65 @@ app.post('/api/todo/week-settle', authMiddleware, async (req, res) => {
         const filePath = getTodoFilePath(req.user.email, targetYear);
         const content = await safeReadFile(filePath);
         let lines = content.split('\n');
-        // 1. 找到待办池区域，收集已完成的任务
-        const completedTasks = [];
-        let currentProject = '';
-        let inPool = false;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.trim() === '## 待办池') {
-                inPool = true;
-                continue;
-            }
-            if (inPool && isSeparator(line)) {
-                break;
-            }
-            if (inPool && isProjectHeader(line)) {
-                currentProject = line.slice(4).trim();
-                continue;
-            }
-            // 收集已完成的一级任务（包括其子任务）
-            if (inPool && isCompletedTask(line.trim())) {
-                const taskLines = [line];
-                const baseIndent = line.search(/\S/);
-                for (let j = i + 1; j < lines.length; j++) {
-                    const nextLine = lines[j];
-                    if (nextLine.trim() === '' || isBlockBoundary(nextLine)) {
-                        break;
-                    }
-                    const nextIndent = nextLine.search(/\S/);
-                    if (nextIndent > baseIndent) {
-                        taskLines.push(nextLine);
-                    }
-                    else {
-                        break;
-                    }
+        // ========== 新算法：阶段 1 - 构建任务树 ==========
+        const projectTrees = buildTaskTreeFromPool(lines);
+        if (projectTrees.size === 0) {
+            return res.status(400).json({ success: false, error: '待办池为空' });
+        }
+        // ========== 阶段 2 - 递归标记所有任务 ==========
+        let hasArchivableContent = false;
+        for (const roots of projectTrees.values()) {
+            for (const root of roots) {
+                markTaskStatus(root);
+                if (root.meta.shouldArchive) {
+                    hasArchivableContent = true;
                 }
-                completedTasks.push({ lines: taskLines, projectName: currentProject });
             }
         }
-        if (completedTasks.length === 0) {
+        if (!hasArchivableContent) {
             return res.status(400).json({ success: false, error: '没有已完成的任务需要结算' });
         }
-        // 2. 从待办池中删除已完成的任务
-        const linesToRemove = new Set();
-        inPool = false;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.trim() === '## 待办池') {
-                inPool = true;
-                continue;
-            }
-            if (inPool && isSeparator(line)) {
-                break;
-            }
-            if (inPool && isCompletedTask(line.trim())) {
-                linesToRemove.add(i);
-                const baseIndent = line.search(/\S/);
-                for (let j = i + 1; j < lines.length; j++) {
-                    const nextLine = lines[j];
-                    if (nextLine.trim() === '' || isBlockBoundary(nextLine)) {
-                        break;
-                    }
-                    const nextIndent = nextLine.search(/\S/);
-                    if (nextIndent > baseIndent) {
-                        linesToRemove.add(j);
-                    }
-                    else {
-                        break;
-                    }
+        // ========== 阶段 3 - 构建归档内容（用于周区块） ==========
+        const archiveContents = [];
+        for (const [projectName, roots] of projectTrees) {
+            const projectArchiveLines = [];
+            for (const root of roots) {
+                if (root.meta.shouldArchive) {
+                    // baseIndent = 0 因为还没加项目名缩进
+                    projectArchiveLines.push(...buildArchiveLines(root, 0));
                 }
+            }
+            if (projectArchiveLines.length > 0) {
+                archiveContents.push({
+                    projectName,
+                    lines: projectArchiveLines,
+                });
             }
         }
-        // 3. 过滤掉要删除的行
-        lines = lines.filter((_, i) => !linesToRemove.has(i));
-        // 3.5 检查待办池中是否有分类变空，如果变空则添加占位文本
-        inPool = false;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.trim() === '## 待办池') {
-                inPool = true;
-                continue;
-            }
-            if (inPool && isSeparator(line)) {
-                break;
-            }
-            // 检查项目标题后是否为空（下一个非空行是另一个项目标题或分隔线）
-            if (inPool && isProjectHeader(line)) {
-                let hasContent = false;
-                let insertPlaceholderAt = -1;
-                for (let j = i + 1; j < lines.length; j++) {
-                    const nextLine = lines[j];
-                    if (nextLine.trim() === '') {
-                        if (insertPlaceholderAt === -1)
-                            insertPlaceholderAt = j;
-                        continue;
-                    }
-                    if (isBlockBoundary(nextLine)) {
-                        // 分类为空，需要添加占位文本
-                        if (!hasContent && insertPlaceholderAt === -1) {
-                            insertPlaceholderAt = j;
-                        }
-                        break;
-                    }
-                    if (isPlaceholder(nextLine)) {
-                        hasContent = true; // 已经有占位文本
-                        break;
-                    }
-                    if (isTaskLine(nextLine)) {
-                        hasContent = true;
-                        break;
-                    }
+        // ========== 阶段 4 - 重建待办池（保留未完成任务） ==========
+        const newPoolLines = ['## 待办池', ''];
+        for (const [projectName, roots] of projectTrees) {
+            const projectRetainedLines = [];
+            for (const root of roots) {
+                if (!root.meta.shouldDelete) {
+                    projectRetainedLines.push(...buildRetainedLines(root));
                 }
-                if (!hasContent && insertPlaceholderAt !== -1) {
-                    lines.splice(insertPlaceholderAt, 0, PLACEHOLDER_TEXT);
-                }
+            }
+            newPoolLines.push(`### ${projectName}`);
+            if (projectRetainedLines.length === 0) {
+                newPoolLines.push(PLACEHOLDER_TEXT, '');
+            }
+            else {
+                newPoolLines.push(...projectRetainedLines, '');
             }
         }
-        // 4. 找到现有的周区块，确定是否需要创建新周
+        newPoolLines.push(''); // 末尾空行
+        // 将归档内容转换为旧格式（兼容后续代码）
+        const completedTasks = archiveContents.map(ac => ({
+            projectName: ac.projectName,
+            lines: ac.lines,
+        }));
+        // ========== 阶段 5 - 确定或创建周区块（保持原有逻辑） ==========
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         // 查找所有周区块（包含开始和结束日期信息）
@@ -968,6 +1070,8 @@ app.post('/api/todo/week-settle', authMiddleware, async (req, res) => {
         if (newProjectLines.length > 0) {
             lines.splice(weekEndIndex, 0, ...newProjectLines, '');
         }
+        // ========== 阶段 6 - 替换待办池内容 ==========
+        lines = replacePoolInLines(lines, newPoolLines);
         await safeWriteFile(filePath, lines.join('\n'));
         res.json({
             success: true,

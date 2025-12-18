@@ -1,17 +1,49 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, message, Input, Tag } from 'antd'
+import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, Drawer, Tabs, message, Input, Tag, App as AntApp } from 'antd'
 import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo } from '@/utils/api'
+import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
 import type { ParsedTodo } from '@/types'
+import MarkdownPreview from '@uiw/react-markdown-preview'
 
 const { Header, Content } = Layout
 
+function isWeekHeader(line: string): boolean {
+  return line.startsWith('## ') && /\d+月\d+日/.test(line)
+}
+
+function validateTodoMarkdownStructure(content: string): string | null {
+  const lines = content.split('\n')
+
+  const poolHeaderIndex = lines.findIndex(line => line.trim() === '## 待办池')
+  if (poolHeaderIndex === -1) {
+    return '缺少「## 待办池」区块标题'
+  }
+
+  const firstSeparatorIndex = lines.findIndex(line => line.trim() === '---')
+  if (firstSeparatorIndex === -1) {
+    return '缺少分隔线「---」（用于分隔待办池与周区块）'
+  }
+
+  if (firstSeparatorIndex < poolHeaderIndex) {
+    return '文件中第一个「---」必须位于「## 待办池」之后（否则会影响新增周/周结算等功能）'
+  }
+
+  for (let i = poolHeaderIndex + 1; i < firstSeparatorIndex; i++) {
+    if (isWeekHeader(lines[i])) {
+      return '检测到周区块标题出现在待办池分隔线之前，请将「---」放在待办池结束位置'
+    }
+  }
+
+  return null
+}
+
 function App() {
+  const { modal } = AntApp.useApp()
   const { user, loading: authLoading, isDemo, logout } = useAuth()
   const isMobile = useIsMobile()
   const [data, setData] = useState<ParsedTodo | null>(null)
@@ -35,6 +67,13 @@ function App() {
   // 新增周相关状态
   const [addWeekModalOpen, setAddWeekModalOpen] = useState(false)
   const [weekTitleInput, setWeekTitleInput] = useState('')
+
+  // Markdown 全文编辑
+  const [todoMdEditorOpen, setTodoMdEditorOpen] = useState(false)
+  const [todoMdDraft, setTodoMdDraft] = useState('')
+  const [todoMdOriginal, setTodoMdOriginal] = useState('')
+  const [todoMdSaving, setTodoMdSaving] = useState(false)
+  const [todoMdMobileTab, setTodoMdMobileTab] = useState<'edit' | 'preview'>('edit')
 
   // 加载年份列表和文档列表
   useEffect(() => {
@@ -127,9 +166,52 @@ function App() {
     setDocViewerOpen(true)
   }
 
+  const handleOpenTodoMdEditor = () => {
+    if (!data) return
+    setTodoMdOriginal(data.raw)
+    setTodoMdDraft(data.raw)
+    setTodoMdMobileTab('edit')
+    setTodoMdEditorOpen(true)
+  }
+
+  const handleCloseTodoMdEditor = () => {
+    if (todoMdDraft !== todoMdOriginal) {
+      modal.confirm({
+        title: '放弃未保存的修改？',
+        content: '关闭后将丢失当前的 Markdown 改动',
+        okText: '放弃修改',
+        cancelText: '继续编辑',
+        onOk: () => setTodoMdEditorOpen(false),
+      })
+      return
+    }
+    setTodoMdEditorOpen(false)
+  }
+
+  const handleSaveTodoMd = async () => {
+    const validationError = validateTodoMarkdownStructure(todoMdDraft)
+    if (validationError) {
+      message.error(validationError)
+      return
+    }
+
+    setTodoMdSaving(true)
+    try {
+      await updateTodo(todoMdDraft, currentYear)
+      setData(parseTodoMd(todoMdDraft))
+      setTodoMdOriginal(todoMdDraft)
+      setTodoMdEditorOpen(false)
+      message.success('保存成功')
+    } catch (e) {
+      message.error(String(e))
+    } finally {
+      setTodoMdSaving(false)
+    }
+  }
+
   // 周结算
   const handleWeekSettle = () => {
-    Modal.confirm({
+    modal.confirm({
       title: '周结算',
       content: (
         <div>
@@ -349,7 +431,7 @@ function App() {
                       icon: <LogoutOutlined />,
                       danger: true,
                       onClick: () => {
-                        Modal.confirm({
+                        modal.confirm({
                           title: '确认退出登录？',
                           okText: '退出',
                           cancelText: '取消',
@@ -391,6 +473,7 @@ function App() {
               onAdd={handleAdd}
               onProjectAdd={handleProjectAdd}
               onReorder={handleReorder}
+              onEditMarkdown={handleOpenTodoMdEditor}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onAddSubtask={handleAddSubtask}
@@ -463,10 +546,115 @@ function App() {
             placeholder="例如：12月9日 - 12月15日"
             value={weekTitleInput}
             onChange={(e) => setWeekTitleInput(e.target.value)}
-            onPressEnter={handleAddWeekConfirm}
           />
         </div>
       </Modal>
+
+      {/* TODO Markdown 全文编辑 */}
+      {isMobile ? (
+        <Drawer
+          title="Markdown 编辑"
+          placement="right"
+          width="100%"
+          open={todoMdEditorOpen}
+          onClose={handleCloseTodoMdEditor}
+          extra={
+            <Button type="primary" onClick={handleSaveTodoMd} loading={todoMdSaving}>
+              保存
+            </Button>
+          }
+          styles={{
+            body: {
+              padding: 0,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            },
+          }}
+        >
+          <div style={{ padding: 12, fontSize: 12, color: '#999' }}>
+            保存前会校验结构：必须包含「## 待办池」，且文件中第一个「---」位于其后。
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <Tabs
+              activeKey={todoMdMobileTab}
+              onChange={(key) => setTodoMdMobileTab(key as 'edit' | 'preview')}
+              items={[
+                {
+                  key: 'edit',
+                  label: '编辑',
+                  children: (
+                    <div style={{ padding: 12 }}>
+                      <Input.TextArea
+                        value={todoMdDraft}
+                        onChange={(e) => setTodoMdDraft(e.target.value)}
+                        style={{ height: '60vh', fontFamily: 'monospace' }}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  key: 'preview',
+                  label: '预览',
+                  children: (
+                    <div style={{ padding: 12 }}>
+                      <MarkdownPreview
+                        source={todoMdDraft}
+                        style={{ backgroundColor: 'transparent' }}
+                      />
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </Drawer>
+      ) : (
+        <Modal
+          title="Markdown 编辑"
+          open={todoMdEditorOpen}
+          onOk={handleSaveTodoMd}
+          onCancel={handleCloseTodoMdEditor}
+          okText="保存"
+          cancelText="关闭"
+          confirmLoading={todoMdSaving}
+          width={1100}
+          styles={{
+            body: {
+              padding: 16,
+            },
+          }}
+        >
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#999' }}>
+            保存前会校验结构：必须包含「## 待办池」，且文件中第一个「---」位于其后。
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <Input.TextArea
+                value={todoMdDraft}
+                onChange={(e) => setTodoMdDraft(e.target.value)}
+                style={{ height: '70vh', fontFamily: 'monospace' }}
+              />
+            </div>
+            <div
+              style={{
+                flex: 1,
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                padding: 12,
+                height: '70vh',
+                overflow: 'auto',
+                background: '#fafafa',
+              }}
+            >
+              <MarkdownPreview
+                source={todoMdDraft}
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* 便利贴面板 - 浮动在右侧 */}
       <NotesPanel

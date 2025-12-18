@@ -104,7 +104,6 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
             <Input
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
-              onPressEnter={handleSaveEdit}
               onKeyDown={(e) => e.key === 'Escape' && handleCancelEdit()}
               autoFocus
               size="small"
@@ -164,7 +163,6 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
               placeholder="输入子任务内容"
               value={subtaskValue}
               onChange={(e) => setSubtaskValue(e.target.value)}
-              onPressEnter={handleAddSubtask}
               onKeyDown={(e) => e.key === 'Escape' && setAddingSubtask(false)}
               autoFocus
               size="small"
@@ -192,8 +190,8 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
       <style>{`
         .todo-item-actions-bubble {
           position: absolute;
-          left: 0;
-          top: -8px;
+          left: 40px;
+          top: -36px;
           background: white;
           border: 1px solid #d9d9d9;
           border-radius: 8px;
@@ -202,13 +200,24 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
           opacity: 0;
           pointer-events: none;
           transition: opacity 0.2s, transform 0.2s;
-          transform: translateY(-4px);
+          transform: translateY(4px);
           z-index: 10;
         }
+        .todo-item-actions-bubble:hover,
         .todo-item-row:hover .todo-item-actions-bubble {
           opacity: 1;
           pointer-events: auto;
           transform: translateY(0);
+        }
+        /* 创建一个不可见的桥接区域，连接任务和气泡 */
+        .todo-item-actions-bubble::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 100%;
+          height: 8px;
+          background: transparent;
         }
       `}</style>
     </div>
