@@ -696,6 +696,131 @@ app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
   }
 })
 
+// 任务移动：支持插入前/插入后/成为子任务（需要登录）
+app.post('/api/todo/move', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { year, fromLineIndex, toLineIndex, position } = req.body as {
+      year?: number
+      fromLineIndex: number
+      toLineIndex: number
+      position: 'before' | 'after' | 'inside'
+    }
+    const targetYear = year || new Date().getFullYear()
+
+    if (typeof fromLineIndex !== 'number' || typeof toLineIndex !== 'number') {
+      return res.status(400).json({ success: false, error: 'fromLineIndex and toLineIndex are required' })
+    }
+    if (position !== 'before' && position !== 'after' && position !== 'inside') {
+      return res.status(400).json({ success: false, error: 'position must be before|after|inside' })
+    }
+
+    const filePath = getTodoFilePath(req.user!.email, targetYear)
+    const content = await safeReadFile(filePath)
+    const lines = content.split('\n')
+
+    if (
+      fromLineIndex < 0 ||
+      fromLineIndex >= lines.length ||
+      toLineIndex < 0 ||
+      toLineIndex >= lines.length
+    ) {
+      return res.status(400).json({ success: false, error: 'Invalid line index' })
+    }
+
+    if (fromLineIndex === toLineIndex) {
+      return res.json({ success: true, newContent: lines.join('\n') })
+    }
+
+    const getIndentLen = (line: string): number => {
+      const match = line.match(/^(\s*)/)
+      return match ? match[1].length : 0
+    }
+
+    const stripIndent = (line: string): string => line.replace(/^\s*/, '')
+
+    const collectSubtreeLines = (startIndex: number): { baseIndent: number; endIndexExclusive: number; block: string[] } => {
+      const startLine = lines[startIndex]
+      const baseIndent = getIndentLen(startLine)
+      const block: string[] = [startLine]
+
+      let i = startIndex + 1
+      for (; i < lines.length; i++) {
+        const line = lines[i]
+        if (line.trim() === '' || isBlockBoundary(line)) {
+          break
+        }
+        const indent = getIndentLen(line)
+        if (indent > baseIndent) {
+          block.push(line)
+        } else {
+          break
+        }
+      }
+
+      return { baseIndent, endIndexExclusive: i, block }
+    }
+
+    const findSubtreeEnd = (startIndex: number): number => {
+      const baseIndent = getIndentLen(lines[startIndex])
+      let i = startIndex + 1
+      for (; i < lines.length; i++) {
+        const line = lines[i]
+        if (line.trim() === '' || isBlockBoundary(line)) {
+          break
+        }
+        const indent = getIndentLen(line)
+        if (indent > baseIndent) continue
+        break
+      }
+      return i
+    }
+
+    const fromLine = lines[fromLineIndex]
+    const toLine = lines[toLineIndex]
+    if (!isTaskLine(fromLine) || !isTaskLine(toLine)) {
+      return res.status(400).json({ success: false, error: 'fromLineIndex and toLineIndex must be todo items' })
+    }
+
+    const moving = collectSubtreeLines(fromLineIndex)
+    const fromRangeStart = fromLineIndex
+    const fromRangeEnd = moving.endIndexExclusive
+
+    // 防止把任务移动到自己/自己子树里
+    if (toLineIndex >= fromRangeStart && toLineIndex < fromRangeEnd) {
+      return res.status(400).json({ success: false, error: 'Cannot move task into itself' })
+    }
+
+    const targetIndent = getIndentLen(toLine)
+    const targetEnd = findSubtreeEnd(toLineIndex)
+
+    const insertionIndexOriginal = position === 'before' ? toLineIndex : targetEnd
+    const newRootIndent = position === 'inside' ? targetIndent + 4 : targetIndent
+    const deltaIndent = newRootIndent - moving.baseIndent
+
+    const adjustedBlock = moving.block.map((line) => {
+      const currentIndent = getIndentLen(line)
+      const nextIndent = Math.max(0, currentIndent + deltaIndent)
+      return ' '.repeat(nextIndent) + stripIndent(line)
+    })
+
+    // 删除原位置
+    lines.splice(fromRangeStart, moving.block.length)
+
+    // 计算插入位置（考虑删除带来的偏移）
+    let insertionIndex = insertionIndexOriginal
+    if (insertionIndexOriginal > fromRangeStart) {
+      insertionIndex = insertionIndexOriginal - moving.block.length
+    }
+
+    lines.splice(insertionIndex, 0, ...adjustedBlock)
+
+    await safeWriteFile(filePath, lines.join('\n'))
+    res.json({ success: true, newContent: lines.join('\n') })
+  } catch (error) {
+    handleError(res, error, 'POST /api/todo/move')
+  }
+})
+
 // 辅助函数：获取某个日期所在周的周一
 function getMonday(date: Date): Date {
   const d = new Date(date)

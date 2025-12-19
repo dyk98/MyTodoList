@@ -4,7 +4,7 @@ import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserO
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, reorderTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo } from '@/utils/api'
+import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, moveTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
 import type { ParsedTodo } from '@/types'
@@ -127,8 +127,8 @@ function App() {
     setData(parsed)
   }
 
-  const handleReorder = async (fromLineIndex: number, toLineIndex: number) => {
-    const newContent = await reorderTodo(fromLineIndex, toLineIndex, currentYear)
+  const handleMove = async (fromLineIndex: number, toLineIndex: number, position: 'before' | 'inside' | 'after') => {
+    const newContent = await moveTodo(fromLineIndex, toLineIndex, position, currentYear)
     const parsed = parseTodoMd(newContent)
     setData(parsed)
   }
@@ -472,7 +472,7 @@ function App() {
               onToggle={handleToggle}
               onAdd={handleAdd}
               onProjectAdd={handleProjectAdd}
-              onReorder={handleReorder}
+              onMove={handleMove}
               onEditMarkdown={handleOpenTodoMdEditor}
               onEdit={handleEdit}
               onDelete={handleDelete}

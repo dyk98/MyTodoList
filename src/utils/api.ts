@@ -279,6 +279,22 @@ export async function reorderTodo(fromLineIndex: number, toLineIndex: number, ye
   return data.newContent
 }
 
+export type TodoMovePosition = 'before' | 'after' | 'inside'
+
+// 任务移动：插入前/插入后/成为子任务
+export async function moveTodo(fromLineIndex: number, toLineIndex: number, position: TodoMovePosition, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ fromLineIndex, toLineIndex, position, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to move todo')
+  }
+  return data.newContent
+}
+
 // 周结算
 export async function weekSettle(year?: number): Promise<{ newContent: string; settledCount: number; weekTitle: string }> {
   const res = await fetch(`${BASE_URL}/todo/week-settle`, {

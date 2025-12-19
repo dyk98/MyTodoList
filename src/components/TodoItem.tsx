@@ -7,16 +7,26 @@ import type { TodoItem as TodoItemType } from '@/types'
 
 const { Text } = Typography
 
+type DragDropPosition = 'before' | 'inside' | 'after'
+
+export interface TodoItemDragHint {
+  activeLineIndex: number
+  overLineIndex: number
+  position: DragDropPosition
+  valid: boolean
+}
+
 interface Props {
   item: TodoItemType
   onToggle: (lineIndex: number) => void
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
   onAddSubtask?: (parentLineIndex: number, task: string) => Promise<void>
+  dragHint?: TodoItemDragHint | null
   readOnly?: boolean
 }
 
-export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
+export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragHint, readOnly = false }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.content)
   const [addingSubtask, setAddingSubtask] = useState(false)
@@ -36,6 +46,9 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
     transition,
     opacity: isDragging ? 0.5 : 1,
   }
+
+  const isDropTarget = dragHint?.overLineIndex === item.lineIndex && dragHint.activeLineIndex !== item.lineIndex
+  const dropColor = dragHint?.valid ? '#1677ff' : '#ff4d4f'
 
   const handleSaveEdit = async () => {
     if (editValue.trim() && onEdit) {
@@ -84,6 +97,66 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
         }}
         className="todo-item-row"
       >
+        {isDropTarget && dragHint && (
+          <>
+            {(dragHint.position === 'before' || dragHint.position === 'after') && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  background: dropColor,
+                  top: dragHint.position === 'before' ? 0 : undefined,
+                  bottom: dragHint.position === 'after' ? 0 : undefined,
+                  pointerEvents: 'none',
+                  borderRadius: 2,
+                }}
+              />
+            )}
+            {dragHint.position === 'inside' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: -2,
+                  right: -2,
+                  top: -2,
+                  bottom: -2,
+                  border: `1px dashed ${dropColor}`,
+                  background: dragHint.valid ? 'rgba(22, 119, 255, 0.08)' : 'rgba(255, 77, 79, 0.08)',
+                  borderRadius: 6,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: -26,
+                fontSize: 12,
+                padding: '2px 8px',
+                background: '#fff',
+                border: `1px solid ${dropColor}`,
+                borderRadius: 999,
+                color: dropColor,
+                pointerEvents: 'none',
+                zIndex: 20,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+              }}
+            >
+              {dragHint.valid ? (
+                dragHint.position === 'before'
+                  ? '松开：插入前'
+                  : dragHint.position === 'after'
+                    ? '松开：插入后'
+                    : '松开：成为子任务'
+              ) : (
+                '不可放置'
+              )}
+            </div>
+          </>
+        )}
         {!readOnly && (
           <HolderOutlined
             {...listeners}
@@ -182,6 +255,7 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, readO
               onEdit={onEdit}
               onDelete={onDelete}
               onAddSubtask={onAddSubtask}
+              dragHint={dragHint}
               readOnly={readOnly}
             />
           ))}

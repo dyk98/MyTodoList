@@ -8,14 +8,19 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import type { ProjectGroup } from '@/types'
-import { TodoItem } from './TodoItem'
+import { TodoItem, type TodoItemDragHint } from './TodoItem'
 import { fetchWeeks } from '@/utils/api'
+
+type DragDropPosition = 'before' | 'inside' | 'after'
+type RectLike = { top: number; height: number }
 
 interface Props {
   projects: ProjectGroup[]
@@ -23,7 +28,7 @@ interface Props {
   onToggle: (lineIndex: number) => void
   onAdd: (task: string, project: string, weekLineIndex?: number) => Promise<void>
   onProjectAdd: (name: string) => Promise<void>
-  onReorder: (fromLineIndex: number, toLineIndex: number) => Promise<void>
+  onMove: (fromLineIndex: number, toLineIndex: number, position: DragDropPosition) => Promise<void>
   onEditMarkdown?: () => void
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
@@ -31,7 +36,7 @@ interface Props {
   readOnly?: boolean
 }
 
-export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onReorder, onEditMarkdown, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
+export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onMove, onEditMarkdown, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('')
@@ -44,6 +49,8 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
   // 项目快速添加任务相关状态
   const [quickAddingProject, setQuickAddingProject] = useState<string | null>(null)
   const [quickTaskInput, setQuickTaskInput] = useState('')
+
+  const [dragHint, setDragHint] = useState<TodoItemDragHint | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -127,6 +134,14 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
     return ids
   }
 
+  const collectAllIdsFromProjects = (): string[] => {
+    const ids: string[] = []
+    for (const project of projects) {
+      ids.push(...collectAllIds(project.items))
+    }
+    return ids
+  }
+
   // 递归查找任务
   const findItemByLineIndex = (items: ProjectGroup['items'], lineIndex: string): ProjectGroup['items'][0] | null => {
     for (const item of items) {
@@ -137,19 +152,103 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
     return null
   }
 
-  const handleDragEnd = async (event: DragEndEvent, projectItems: ProjectGroup['items']) => {
+  const findItemInProjects = (lineIndex: string): ProjectGroup['items'][0] | null => {
+    for (const project of projects) {
+      const found = findItemByLineIndex(project.items, lineIndex)
+      if (found) return found
+    }
+    return null
+  }
+
+  const containsDescendant = (node: ProjectGroup['items'][0], targetLineIndex: number): boolean => {
+    for (const child of node.children) {
+      if (child.lineIndex === targetLineIndex) return true
+      if (containsDescendant(child, targetLineIndex)) return true
+    }
+    return false
+  }
+
+  const getDropPosition = (activeCenterY: number, overTop: number, overHeight: number): DragDropPosition => {
+    const ratio = (activeCenterY - overTop) / Math.max(1, overHeight)
+    if (ratio < 0.3) return 'before'
+    if (ratio > 0.7) return 'after'
+    return 'inside'
+  }
+
+  const updateDragHint = (activeId: unknown, overId: unknown, activeRect: RectLike, overRect: RectLike) => {
+    const activeLineIndex = Number(activeId)
+    const overLineIndex = Number(overId)
+    if (!Number.isFinite(activeLineIndex) || !Number.isFinite(overLineIndex)) {
+      setDragHint(null)
+      return
+    }
+
+    const position = getDropPosition(
+      activeRect.top + activeRect.height / 2,
+      overRect.top,
+      overRect.height
+    )
+
+    const activeItem = findItemInProjects(String(activeLineIndex))
+    const valid =
+      activeLineIndex !== overLineIndex &&
+      !!activeItem &&
+      !containsDescendant(activeItem, overLineIndex)
+
+    setDragHint({ activeLineIndex, overLineIndex, position, valid })
+  }
+
+  const handleDragStart = (_event: DragStartEvent) => {
+    setDragHint(null)
+  }
+
+  const handleDragMove = (event: DragMoveEvent) => {
     const { active, over } = event
-    if (!over || active.id === over.id) return
+    if (!over) {
+      setDragHint(null)
+      return
+    }
 
-    const fromItem = findItemByLineIndex(projectItems, active.id as string)
-    const toItem = findItemByLineIndex(projectItems, over.id as string)
+    const activeRect = active.rect.current.translated
+    const overRect = over.rect
+    if (!activeRect || !overRect) {
+      setDragHint(null)
+      return
+    }
 
-    if (!fromItem || !toItem) return
+    updateDragHint(active.id, over.id, activeRect, overRect)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    const currentHint = dragHint
+    setDragHint(null)
+
+    if (!over) return
+
+    const fromLineIndex = Number(active.id)
+    const toLineIndex = Number(over.id)
+    if (!Number.isFinite(fromLineIndex) || !Number.isFinite(toLineIndex)) return
+
+    const position = currentHint && currentHint.activeLineIndex === fromLineIndex && currentHint.overLineIndex === toLineIndex
+      ? currentHint.position
+      : 'before'
+
+    const activeItem = findItemInProjects(String(fromLineIndex))
+    const valid =
+      fromLineIndex !== toLineIndex &&
+      !!activeItem &&
+      !containsDescendant(activeItem, toLineIndex)
+
+    if (!valid) {
+      message.warning('不能拖拽到自己的子任务里')
+      return
+    }
 
     try {
-      await onReorder(fromItem.lineIndex, toItem.lineIndex)
+      await onMove(fromLineIndex, toLineIndex, position)
     } catch (e) {
-      message.error('排序失败: ' + String(e))
+      message.error('移动失败: ' + String(e))
     }
   }
 
@@ -192,30 +291,20 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
         </div>
       ),
       children: (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={(event) => handleDragEnd(event, project.items)}
-        >
-          <SortableContext
-            items={collectAllIds(project.items)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div style={{ marginTop: -20, paddingLeft: 24 }}>
-              {project.items.map((item) => (
-                <TodoItem
-                  key={item.lineIndex}
-                  item={item}
-                  onToggle={onToggle}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onAddSubtask={onAddSubtask}
-                  readOnly={readOnly}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div style={{ marginTop: -20, paddingLeft: 24 }}>
+          {project.items.map((item) => (
+            <TodoItem
+              key={item.lineIndex}
+              item={item}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onAddSubtask={onAddSubtask}
+              dragHint={dragHint}
+              readOnly={readOnly}
+            />
+          ))}
+        </div>
       ),
     }))
 
@@ -256,6 +345,11 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
         )
       }
     >
+      {!readOnly && (
+        <div style={{ marginBottom: 8, fontSize: 12, color: '#999' }}>
+          拖拽提示：拖到任务上方/下方可插入，拖到任务中部可变为子任务
+        </div>
+      )}
       {!readOnly && adding && (
         <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 8 }}>
           <Space direction="vertical" style={{ width: '100%' }}>
@@ -308,11 +402,25 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
         </div>
       )}
 
-      <Collapse
-        items={collapseItems}
-        defaultActiveKey={projects.filter(p => p.items.length > 0).map(p => p.name)}
-        ghost
-      />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setDragHint(null)}
+      >
+        <SortableContext
+          items={collectAllIdsFromProjects()}
+          strategy={verticalListSortingStrategy}
+        >
+          <Collapse
+            items={collapseItems}
+            defaultActiveKey={projects.filter(p => p.items.length > 0).map(p => p.name)}
+            ghost
+          />
+        </SortableContext>
+      </DndContext>
 
       <Modal
         title="新增分类"
