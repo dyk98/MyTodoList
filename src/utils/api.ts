@@ -133,6 +133,29 @@ export async function fetchYears(): Promise<number[]> {
   return data.years || []
 }
 
+export interface TodoStatus {
+  currentYear: number
+  prevYear: number
+  currentExists: boolean
+  prevExists: boolean
+}
+
+export async function fetchTodoStatus(): Promise<TodoStatus> {
+  const res = await fetch(`${BASE_URL}/todo/status`, {
+    headers: getAuthHeaders(),
+  })
+  const data = await res.json() as { success: boolean; error?: string } & Partial<TodoStatus>
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch todo status')
+  }
+  return {
+    currentYear: data.currentYear ?? new Date().getFullYear(),
+    prevYear: data.prevYear ?? new Date().getFullYear() - 1,
+    currentExists: !!data.currentExists,
+    prevExists: !!data.prevExists,
+  }
+}
+
 // 获取 TODO 内容
 export async function fetchTodo(year?: number): Promise<{ content: string; year: number; isDemo?: boolean }> {
   const url = year ? `${BASE_URL}/todo?year=${year}` : `${BASE_URL}/todo`
@@ -144,6 +167,18 @@ export async function fetchTodo(year?: number): Promise<{ content: string; year:
     throw new Error(data.error || 'Failed to fetch todo')
   }
   return { content: data.content, year: data.year || new Date().getFullYear(), isDemo: data.isDemo }
+}
+
+export async function createTodoYear(year: number, content: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/todo/create-year`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ year, content }),
+  })
+  const data = await res.json() as ApiResponse
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to create todo')
+  }
 }
 
 // 更新整个 TODO 文件

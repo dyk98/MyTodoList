@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, Drawer, Tabs, message, Input, Tag, App as AntApp } from 'antd'
 import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
-import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal } from '@/components'
+import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal, YearMigrationModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { fetchTodo, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, moveTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo } from '@/utils/api'
+import { fetchTodo, fetchTodoStatus, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, moveTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo, createTodoYear } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
-import type { ParsedTodo } from '@/types'
+import type { ParsedTodo, ProjectGroup, TodoItem } from '@/types'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 
 const { Header, Content } = Layout
@@ -42,6 +42,47 @@ function validateTodoMarkdownStructure(content: string): string | null {
   return null
 }
 
+const PLACEHOLDER_TEXT = '（暂无未完成任务）'
+
+function filterSelectedItems(items: TodoItem[], selected: Set<number>): TodoItem[] {
+  const result: TodoItem[] = []
+  for (const item of items) {
+    const children = filterSelectedItems(item.children, selected)
+    if (selected.has(item.lineIndex) || children.length > 0) {
+      result.push({ ...item, children })
+    }
+  }
+  return result
+}
+
+function serializeTodoItems(items: TodoItem[], indent = 0): string[] {
+  const lines: string[] = []
+  for (const item of items) {
+    const prefix = '    '.repeat(indent)
+    const status = item.completed ? 'x' : ' '
+    lines.push(`${prefix}- [${status}] ${item.content}`)
+    lines.push(...serializeTodoItems(item.children, indent + 1))
+  }
+  return lines
+}
+
+function buildMigratedTodoContent(year: number, projects: ProjectGroup[], selected: Set<number>): string {
+  const lines: string[] = [`# ${year} TODO`, '', '## 待办池', '']
+
+  for (const project of projects) {
+    lines.push(`### ${project.name}`, '')
+    const filtered = filterSelectedItems(project.items, selected)
+    if (filtered.length === 0) {
+      lines.push(PLACEHOLDER_TEXT, '')
+    } else {
+      lines.push(...serializeTodoItems(filtered), '')
+    }
+  }
+
+  lines.push('---', '')
+  return lines.join('\n')
+}
+
 function App() {
   const { modal } = AntApp.useApp()
   const { user, loading: authLoading, isDemo, logout } = useAuth()
@@ -51,6 +92,11 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [years, setYears] = useState<number[]>([])
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear())
+  const [migrationOpen, setMigrationOpen] = useState(false)
+  const [migrationSourceYear, setMigrationSourceYear] = useState<number | null>(null)
+  const [migrationTargetYear, setMigrationTargetYear] = useState<number | null>(null)
+  const [migrationProjects, setMigrationProjects] = useState<ProjectGroup[]>([])
+  const [migrationLoading, setMigrationLoading] = useState(false)
 
   // 文档相关状态
   const [docs, setDocs] = useState<{ name: string; filename: string }[]>([])
@@ -75,13 +121,13 @@ function App() {
   const [todoMdSaving, setTodoMdSaving] = useState(false)
   const [todoMdMobileTab, setTodoMdMobileTab] = useState<'edit' | 'preview'>('edit')
 
-  // 加载年份列表和文档列表
+  // 加载文档列表
   useEffect(() => {
-    fetchYears().then(setYears).catch(console.error)
+    if (authLoading) return
     fetchDocs().then(setDocs).catch(console.error)
-  }, [])
+  }, [authLoading])
 
-  const loadData = useCallback(async (year?: number) => {
+  const loadData = useCallback(async (year?: number): Promise<ParsedTodo | null> => {
     try {
       setLoading(true)
       const { content, year: loadedYear } = await fetchTodo(year)
@@ -89,16 +135,63 @@ function App() {
       setData(parsed)
       setCurrentYear(loadedYear)
       setError(null)
+      return parsed
     } catch (e) {
       setError(String(e))
+      return null
     } finally {
       setLoading(false)
     }
   }, [])
-
+ 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (authLoading) return
+    let cancelled = false
+
+    const init = async () => {
+      try {
+        const [yearsList, status] = await Promise.all([
+          fetchYears(),
+          fetchTodoStatus(),
+        ])
+        if (cancelled) return
+        setYears(yearsList)
+
+        if (status.currentExists) {
+          await loadData(status.currentYear)
+          return
+        }
+
+        if (status.prevExists) {
+          const parsed = await loadData(status.prevYear)
+          if (cancelled) return
+          if (!isDemo) {
+            setMigrationSourceYear(status.prevYear)
+            setMigrationTargetYear(status.currentYear)
+            setMigrationProjects(parsed?.pool || [])
+            setMigrationOpen(true)
+          }
+          return
+        }
+
+        await loadData(status.currentYear)
+        if (cancelled) return
+        const refreshedYears = await fetchYears()
+        if (cancelled) return
+        setYears(refreshedYears)
+      } catch (e) {
+        if (!cancelled) {
+          setError(String(e))
+        }
+      }
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, isDemo, loadData])
 
   const handleYearChange = (year: number) => {
     setCurrentYear(year)
@@ -159,6 +252,47 @@ function App() {
     const newContent = await addSubtask(task, parentLineIndex, currentYear)
     const parsed = parseTodoMd(newContent)
     setData(parsed)
+  }
+
+  const handleMigrationCancel = () => {
+    setMigrationOpen(false)
+  }
+
+  const handleMigrationConfirm = async (selectedLineIndices: number[]) => {
+    if (!migrationTargetYear) return
+
+    const projects = migrationProjects.length > 0 ? migrationProjects : data?.pool || []
+    const selectedSet = new Set(selectedLineIndices)
+    const content = buildMigratedTodoContent(migrationTargetYear, projects, selectedSet)
+
+    const createYear = async () => {
+      setMigrationLoading(true)
+      try {
+        await createTodoYear(migrationTargetYear, content)
+        message.success(`已创建 ${migrationTargetYear} 年 TODO`)
+        setMigrationOpen(false)
+        const refreshedYears = await fetchYears()
+        setYears(refreshedYears)
+        await loadData(migrationTargetYear)
+      } catch (e) {
+        message.error(String(e))
+      } finally {
+        setMigrationLoading(false)
+      }
+    }
+
+    if (selectedLineIndices.length === 0) {
+      modal.confirm({
+        title: '确认创建空结构？',
+        content: `未选择任何任务，将创建空结构的 ${migrationTargetYear} 年 TODO，创建后将不再提示。`,
+        okText: '确认创建',
+        cancelText: '继续选择',
+        onOk: createYear,
+      })
+      return
+    }
+
+    await createYear()
   }
 
   const handleDocClick = (doc: { name: string; filename: string }) => {
@@ -518,6 +652,19 @@ function App() {
         accept=".md"
         onChange={handleFileChange}
       />
+
+      {/* 年度迁移弹窗 */}
+      {migrationSourceYear !== null && migrationTargetYear !== null && (
+        <YearMigrationModal
+          open={migrationOpen}
+          sourceYear={migrationSourceYear}
+          targetYear={migrationTargetYear}
+          projects={migrationProjects}
+          confirmLoading={migrationLoading}
+          onConfirm={handleMigrationConfirm}
+          onCancel={handleMigrationCancel}
+        />
+      )}
 
       {/* 登录/注册模态框 */}
       <AuthModal

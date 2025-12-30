@@ -33,6 +33,107 @@ function getTodoFilePath(userEmail: string | null, year: number | string): strin
   return path.join(getUserDataDir(userEmail), `${year}-todo.md`)
 }
 
+function resolveYear(input: unknown): number {
+  if (typeof input === 'number' && Number.isFinite(input)) {
+    return input
+  }
+  if (typeof input === 'string') {
+    const parsed = parseInt(input, 10)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+  }
+  return new Date().getFullYear()
+}
+
+function buildEmptyTodoTemplate(year: number): string {
+  return `# ${year} TODO\n\n## 待办池\n\n---\n`
+}
+
+interface TodoFileStatus {
+  filePath: string
+  targetYear: number
+  prevYear: number
+  currentYear: number
+  exists: boolean
+  prevExists: boolean
+  isCurrentYear: boolean
+}
+
+async function getTodoFileStatus(userEmail: string | null, targetYear: number): Promise<TodoFileStatus> {
+  const currentYear = new Date().getFullYear()
+  const prevYear = targetYear - 1
+  const filePath = getTodoFilePath(userEmail, targetYear)
+  const exists = await fse.pathExists(filePath)
+  const prevExists = await fse.pathExists(getTodoFilePath(userEmail, prevYear))
+  return {
+    filePath,
+    targetYear,
+    prevYear,
+    currentYear,
+    exists,
+    prevExists,
+    isCurrentYear: targetYear === currentYear,
+  }
+}
+
+function buildTodoGuardPayload(status: TodoFileStatus): { statusCode: number; error: string; code: string } {
+  if (status.isCurrentYear && status.prevExists) {
+    return { statusCode: 409, error: '需要先创建新的年度 TODO', code: 'YEAR_MIGRATION_REQUIRED' }
+  }
+  return { statusCode: 404, error: 'TODO 文件不存在', code: 'TODO_NOT_FOUND' }
+}
+
+async function readTodoFileWithGuard(
+  res: express.Response,
+  userEmail: string | null,
+  targetYear: number,
+  allowAutoCreate: boolean
+): Promise<{ content: string; status: TodoFileStatus } | null> {
+  const status = await getTodoFileStatus(userEmail, targetYear)
+  if (!status.exists) {
+    if (allowAutoCreate && status.isCurrentYear && !status.prevExists) {
+      const defaultContent = buildEmptyTodoTemplate(targetYear)
+      await safeWriteFile(status.filePath, defaultContent)
+      return { content: defaultContent, status }
+    }
+    const guard = buildTodoGuardPayload(status)
+    res.status(guard.statusCode).json({
+      success: false,
+      error: guard.error,
+      code: guard.code,
+      year: status.targetYear,
+      currentYear: status.currentYear,
+      prevYear: status.prevYear,
+    })
+    return null
+  }
+
+  const content = await fse.readFile(status.filePath, 'utf-8')
+  return { content, status }
+}
+
+async function ensureTodoFileExists(
+  res: express.Response,
+  userEmail: string | null,
+  targetYear: number
+): Promise<TodoFileStatus | null> {
+  const status = await getTodoFileStatus(userEmail, targetYear)
+  if (!status.exists) {
+    const guard = buildTodoGuardPayload(status)
+    res.status(guard.statusCode).json({
+      success: false,
+      error: guard.error,
+      code: guard.code,
+      year: status.targetYear,
+      currentYear: status.currentYear,
+      prevYear: status.prevYear,
+    })
+    return null
+  }
+  return status
+}
+
 // 获取用户的便利贴文件路径
 function getNotesFilePath(userEmail: string | null): string {
   if (!userEmail) {
@@ -269,14 +370,32 @@ app.get('/api/years', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   }
 })
 
+// 获取当前年 TODO 文件状态
+app.get('/api/todo/status', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const userEmail = req.user?.email || null
+    const currentYear = new Date().getFullYear()
+    const status = await getTodoFileStatus(userEmail, currentYear)
+    res.json({
+      success: true,
+      currentYear,
+      prevYear: status.prevYear,
+      currentExists: status.exists,
+      prevExists: status.prevExists,
+    })
+  } catch (error) {
+    handleError(res, error, 'GET /api/todo/status')
+  }
+})
+
 // 获取 TODO 文件内容（支持年份参数）
 app.get('/api/todo', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userEmail = req.user?.email || null
-    const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
-    const filePath = getTodoFilePath(userEmail, year)
-    const content = await safeReadFile(filePath, `# ${year} TODO\n\n## 待办池\n\n---\n`)
-    res.json({ success: true, content, year: Number(year), isDemo: !userEmail })
+    const targetYear = resolveYear(req.query.year)
+    const fileData = await readTodoFileWithGuard(res, userEmail, targetYear, true)
+    if (!fileData) return
+    res.json({ success: true, content: fileData.content, year: targetYear, isDemo: !userEmail })
   } catch (error) {
     handleError(res, error, 'GET /api/todo')
   }
@@ -286,15 +405,41 @@ app.get('/api/todo', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 app.put('/api/todo', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { content, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
     if (typeof content !== 'string') {
       return res.status(400).json({ success: false, error: 'content is required' })
     }
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    await safeWriteFile(filePath, content)
+    const status = await ensureTodoFileExists(res, req.user!.email, targetYear)
+    if (!status) return
+    await safeWriteFile(status.filePath, content)
     res.json({ success: true })
   } catch (error) {
     handleError(res, error, 'PUT /api/todo')
+  }
+})
+
+// 创建新年度 TODO 文件（需要登录）
+app.post('/api/todo/create-year', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { year, content } = req.body
+    const targetYear = resolveYear(year)
+
+    if (typeof content !== 'string') {
+      return res.status(400).json({ success: false, error: 'content is required' })
+    }
+
+    const status = await getTodoFileStatus(req.user!.email, targetYear)
+    if (status.exists) {
+      return res.status(400).json({ success: false, error: '该年度 TODO 已存在' })
+    }
+    if (!status.isCurrentYear) {
+      return res.status(400).json({ success: false, error: '只能创建当年的 TODO 文件' })
+    }
+
+    await safeWriteFile(status.filePath, content)
+    res.json({ success: true })
+  } catch (error) {
+    handleError(res, error, 'POST /api/todo/create-year')
   }
 })
 
@@ -302,14 +447,14 @@ app.put('/api/todo', authMiddleware, async (req: AuthRequest, res) => {
 app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { lineIndex, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
     if (typeof lineIndex !== 'number') {
       return res.status(400).json({ success: false, error: 'lineIndex is required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    await ensureFileExists(filePath, `# ${targetYear} TODO\n\n## 待办池\n\n---\n`)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -325,7 +470,7 @@ app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ success: false, error: 'Line is not a todo item' })
     }
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'PATCH /api/todo/toggle')
@@ -336,9 +481,10 @@ app.patch('/api/todo/toggle', authMiddleware, async (req: AuthRequest, res) => {
 app.get('/api/weeks', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   try {
     const userEmail = req.user?.email || null
-    const year = req.query.year ? String(req.query.year) : new Date().getFullYear()
-    const filePath = getTodoFilePath(userEmail, year)
-    const content = await safeReadFile(filePath)
+    const targetYear = resolveYear(req.query.year)
+    const fileData = await readTodoFileWithGuard(res, userEmail, targetYear, false)
+    if (!fileData) return
+    const content = fileData.content
     const lines = content.split('\n')
 
     const weeks: { title: string; lineIndex: number }[] = []
@@ -362,13 +508,14 @@ app.get('/api/weeks', optionalAuthMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { task, project, year, weekLineIndex } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
     if (!task || !project) {
       return res.status(400).json({ success: false, error: 'task and project are required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     let insertIndex = -1
@@ -436,7 +583,7 @@ app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
     const newTask = `- [ ] ${task}`
     lines.splice(insertIndex, 0, newTask)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/add')
@@ -447,14 +594,15 @@ app.post('/api/todo/add', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { task, parentLineIndex, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (!task || typeof parentLineIndex !== 'number') {
       return res.status(400).json({ success: false, error: 'task and parentLineIndex are required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (parentLineIndex < 0 || parentLineIndex >= lines.length) {
@@ -492,7 +640,7 @@ app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) 
     const newSubtask = `${childIndent}- [ ] ${task}`
     lines.splice(insertIndex, 0, newSubtask)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/add-subtask')
@@ -503,13 +651,14 @@ app.post('/api/todo/add-subtask', authMiddleware, async (req: AuthRequest, res) 
 app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { name, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
     if (!name) {
       return res.status(400).json({ success: false, error: 'name is required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     // 检查是否已存在该分类
@@ -543,7 +692,7 @@ app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
     // 在 --- 分隔线前插入新分类
     lines.splice(separatorIndex, 0, projectHeader, '', PLACEHOLDER_TEXT, '')
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/project/add')
@@ -554,14 +703,15 @@ app.post('/api/project/add', authMiddleware, async (req: AuthRequest, res) => {
 app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { lineIndex, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (typeof lineIndex !== 'number') {
       return res.status(400).json({ success: false, error: 'lineIndex is required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -595,7 +745,7 @@ app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => 
       lines.splice(linesToDelete[i], 1)
     }
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'DELETE /api/todo/delete')
@@ -606,14 +756,15 @@ app.delete('/api/todo/delete', authMiddleware, async (req: AuthRequest, res) => 
 app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { lineIndex, newContent, year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (typeof lineIndex !== 'number' || typeof newContent !== 'string') {
       return res.status(400).json({ success: false, error: 'lineIndex and newContent are required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (lineIndex < 0 || lineIndex >= lines.length) {
@@ -633,7 +784,7 @@ app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
 
     lines[lineIndex] = match[1] + newContent.trim()
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'PATCH /api/todo/edit')
@@ -644,14 +795,15 @@ app.patch('/api/todo/edit', authMiddleware, async (req: AuthRequest, res) => {
 app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year, fromLineIndex, toLineIndex } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (typeof fromLineIndex !== 'number' || typeof toLineIndex !== 'number') {
       return res.status(400).json({ success: false, error: 'fromLineIndex and toLineIndex are required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (fromLineIndex < 0 || fromLineIndex >= lines.length || toLineIndex < 0 || toLineIndex >= lines.length) {
@@ -689,7 +841,7 @@ app.post('/api/todo/reorder', authMiddleware, async (req: AuthRequest, res) => {
     // 插入到新位置
     lines.splice(newToIndex, 0, ...linesToMove)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/reorder')
@@ -705,7 +857,7 @@ app.post('/api/todo/move', authMiddleware, async (req: AuthRequest, res) => {
       toLineIndex: number
       position: 'before' | 'after' | 'inside'
     }
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (typeof fromLineIndex !== 'number' || typeof toLineIndex !== 'number') {
       return res.status(400).json({ success: false, error: 'fromLineIndex and toLineIndex are required' })
@@ -714,8 +866,9 @@ app.post('/api/todo/move', authMiddleware, async (req: AuthRequest, res) => {
       return res.status(400).json({ success: false, error: 'position must be before|after|inside' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     if (
@@ -814,7 +967,7 @@ app.post('/api/todo/move', authMiddleware, async (req: AuthRequest, res) => {
 
     lines.splice(insertionIndex, 0, ...adjustedBlock)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/todo/move')
@@ -1057,11 +1210,11 @@ function replacePoolInLines(lines: string[], newPoolContent: string[]): string[]
 app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
-    let lines = content.split('\n')
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    let lines = fileData.content.split('\n')
 
     // ========== 新算法：阶段 1 - 构建任务树 ==========
     const projectTrees = buildTaskTreeFromPool(lines)
@@ -1135,7 +1288,8 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
     }))
 
     // ========== 阶段 5 - 确定或创建周区块（保持原有逻辑） ==========
-    const today = new Date()
+    const now = new Date()
+    const today = new Date(targetYear, now.getMonth(), now.getDate())
     today.setHours(0, 0, 0, 0)
 
     // 查找所有周区块（包含开始和结束日期信息）
@@ -1147,9 +1301,8 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
         const match = title.match(/(\d+)月(\d+)日\s*-\s*(\d+)月(\d+)日/)
         if (match) {
           const [, startMonth, startDay, endMonth, endDay] = match
-          const year = new Date().getFullYear()
-          const startDate = new Date(year, parseInt(startMonth) - 1, parseInt(startDay))
-          const endDate = new Date(year, parseInt(endMonth) - 1, parseInt(endDay))
+          const startDate = new Date(targetYear, parseInt(startMonth) - 1, parseInt(startDay))
+          const endDate = new Date(targetYear, parseInt(endMonth) - 1, parseInt(endDay))
           weekBlocks.push({ title, lineIndex: i, startDate, endDate })
         }
       }
@@ -1368,7 +1521,7 @@ app.post('/api/todo/week-settle', authMiddleware, async (req: AuthRequest, res) 
     // ========== 阶段 6 - 替换待办池内容 ==========
     lines = replacePoolInLines(lines, newPoolLines)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(fileData.status.filePath, lines.join('\n'))
     res.json({
       success: true,
       newContent: lines.join('\n'),
@@ -1439,14 +1592,15 @@ app.post('/api/docs/upload', authMiddleware, upload.single('file'), (req, res) =
 app.post('/api/week/add', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { year, weekTitle } = req.body
-    const targetYear = year || new Date().getFullYear()
+    const targetYear = resolveYear(year)
 
     if (!weekTitle) {
       return res.status(400).json({ success: false, error: 'weekTitle is required' })
     }
 
-    const filePath = getTodoFilePath(req.user!.email, targetYear)
-    const content = await safeReadFile(filePath)
+    const fileData = await readTodoFileWithGuard(res, req.user!.email, targetYear, false)
+    if (!fileData) return
+    const { content, status } = fileData
     const lines = content.split('\n')
 
     // 检查周区块是否已存在（使用精确匹配）
@@ -1474,7 +1628,7 @@ app.post('/api/week/add', authMiddleware, async (req: AuthRequest, res) => {
     const newWeekBlock = ['', '---', '', `## ${weekTitle}`, '']
     lines.splice(insertPosition, 0, ...newWeekBlock)
 
-    await safeWriteFile(filePath, lines.join('\n'))
+    await safeWriteFile(status.filePath, lines.join('\n'))
     res.json({ success: true, newContent: lines.join('\n') })
   } catch (error) {
     handleError(res, error, 'POST /api/week/add')
