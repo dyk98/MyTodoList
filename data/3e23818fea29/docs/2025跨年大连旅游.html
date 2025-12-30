@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大连跨年5日深度游计划</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 10px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            font-weight: 600;
+        }
+
+        .day-card {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .day-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .day-title {
+            font-size: 20px;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .timeline-item {
+            margin-bottom: 15px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .timeline-item::before {
+            content: "⏰";
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        .time {
+            color: #764ba2;
+            font-weight: 600;
+            display: inline-block;
+            min-width: 60px;
+        }
+
+        .location {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .price {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .tips {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .tips::before {
+            content: "💡 ";
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th {
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tbody tr:hover {
+            background: #f8f9ff;
+        }
+
+        .restaurant-card {
+            background: white;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .restaurant-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.15);
+        }
+
+        .restaurant-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .restaurant-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .info-label {
+            display: inline-block;
+            min-width: 80px;
+            color: #666;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .badge.price-badge {
+            background: #27ae60;
+        }
+
+        .badge.time-badge {
+            background: #e74c3c;
+        }
+
+        ul, ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        hr {
+            border: none;
+            border-top: 2px dashed #e8e8e8;
+            margin: 30px 0;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #ffc107 0%, #ff9800 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px 5px;
+            }
+
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .header p {
+                font-size: 14px;
+            }
+
+            .content {
+                padding: 20px 15px;
+            }
+
+            .section-title {
+                font-size: 20px;
+            }
+
+            .day-title {
+                font-size: 18px;
+            }
+
+            .day-card {
+                padding: 15px;
+            }
+
+            table {
+                font-size: 12px;
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            th, td {
+                padding: 10px 8px;
+            }
+
+            .restaurant-info {
+                grid-template-columns: 1fr;
+            }
+
+            .timeline-item {
+                font-size: 14px;
+            }
+        }
+
+        /* 打印样式 */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .day-card:hover {
+                transform: none;
+            }
+
+            .restaurant-card:hover {
+                border-color: #e8e8e8;
+                box-shadow: none;
+            }
+        }
+
+        .toc {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .toc-title {
+            font-size: 18px;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .toc a {
+            color: #333;
+            text-decoration: none;
+            display: block;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+
+        .toc a:hover {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎊 大连跨年5日深度游计划</h1>
+            <p>含两次东北洗浴体验 | 2024.12.31 - 2025.1.4</p>
+        </div>
+
+        <div class="content">
+            <!-- 目录 -->
+            <div class="toc">
+                <div class="toc-title">📋 快速导航</div>
+                <a href="#itinerary">一、行程安排</a>
+                <a href="#booking">二、必须提前预定的项目清单</a>
+                <a href="#food">三、美食探索深度补充</a>
+                <a href="#alternative">四、备选日料餐厅库</a>
+            </div>
+
+            <!-- 一、行程安排 -->
+            <div class="section" id="itinerary">
+                <h2 class="section-title">一、行程安排</h2>
+
+                <div class="day-card">
+                    <h3 class="day-title">Day 1：12月31日（周三）- 抵达与跨年</h3>
+
+                    <div class="timeline-item">
+                        <span class="time">16:15</span> 广州白云国际机场T2出发（南方航空CZ6200），飞行约3小时20分钟
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">19:35</span> 落地大连周水子国际机场（DLC）
+                        <ul>
+                            <li><strong>推荐打车</strong>：约30分钟，费用约45元</li>
+                            <li><strong>地铁备选</strong>：2号线（机场站→中山广场站），约40分钟，票价3元</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">20:15</span> 抵达<span class="location">璞瑅酒店</span>（中山区勤俭街23号），办理入住
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">20:45</span> 前往天津街/青泥洼桥商圈（跨年核心区）
+                        <ul>
+                            <li><strong>跨年体验</strong>：天津街"焕燃2026"沉浸式晚会、港汇中心AI光影秀</li>
+                            <li><strong>跨年轻食</strong>：
+                                <ul>
+                                    <li><span class="location">糯米香</span>（天津街199号）：红豆粥、炸元宵，<span class="price">人均15元</span></li>
+                                    <li><span class="location">孟哥焖子</span>：麻酱+辣椒油+蒜汁，<span class="price">10元/份</span></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">23:00</span> 跨年倒计时，参与全场大合唱《我和我的祖国》
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">00:15</span> 返回璞瑅酒店休息
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <h3 class="day-title">Day 2：1月1日（周四）- 经典海岸+泉溪温泉</h3>
+
+                    <div class="timeline-item">
+                        <span class="time">09:00</span> 璞瑅酒店早餐（新中式风格餐厅，推荐东北杂粮粥+酸菜包子+现磨豆浆）
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">10:00</span> 前往<span class="location">星海广场</span>
+                        <ul>
+                            <li>打卡百年城雕（喂海鸥点位，带面包碎）</li>
+                            <li>华表遗址、星海跨海大桥远景</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">12:00</span> 午餐：<span class="location">喜鼎海胆水饺</span>（星海湾壹号店）
+                        <ul>
+                            <li><strong>必点</strong>：海胆水饺、虾爬子水饺、凉拌海蜇</li>
+                            <li><span class="price">人均160元</span>，需提前1小时线上取号</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">13:30</span> <span class="location">圣亚海洋世界</span>（5馆联票）
+                        <ul>
+                            <li>白鲸传奇表演（14:00场，提前15分钟占座）</li>
+                            <li>南极企鹅馆、海底通道</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">17:30</span> 晚餐：<span class="location">正黄旗海鲜烧烤</span>（西安路店）
+                        <ul>
+                            <li><strong>必点</strong>：厚皮活海肠捞饭、渤海湾肥生蚝、锅包肉</li>
+                            <li><span class="price">人均180元</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">19:00</span> <span class="location">泉溪温泉生活馆</span>
+                        <ul>
+                            <li><strong>必体验</strong>：冰岛蓝湖泉、东北特色搓澡、蒙古包汗蒸</li>
+                            <li><span class="price">门票137元</span>，搓澡+按摩套餐268元</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">23:00</span> 返回璞瑅酒店休息
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <h3 class="day-title">Day 3：1月2日（周五）- 海洋公园+东港风情+高端日料</h3>
+
+                    <div class="timeline-item">
+                        <span class="time">09:00</span> 璞瑅酒店早餐
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">10:00</span> 前往<span class="location">老虎滩海洋公园</span>
+                        <ul>
+                            <li>路线：极地馆→珊瑚馆→海兽馆</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">12:30</span> 午餐：<span class="location">品海楼</span>（老虎滩店）
+                        <ul>
+                            <li><strong>必点</strong>：家焖杂拌鱼、烤海参、海鲜焖子</li>
+                            <li><span class="price">人均120元</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">14:30</span> <span class="location">东港商务区</span>
+                        <ul>
+                            <li>打卡：威尼斯水城、东港海岸木栈道（喂海鸥）</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">17:00</span> <span class="location">俄罗斯风情街</span>
+                        <ul>
+                            <li>必逛：俄货商店（巧克力、紫皮糖）</li>
+                            <li>小吃：俄式红肠、列巴</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">18:30</span> 高端日料体验：<span class="location">清水至魂</span>（星海广场店）
+                        <ul>
+                            <li><strong>推荐理由</strong>：大连唯一米其林三星标准怀石料理</li>
+                            <li><strong>必点</strong>：蓝鳍金枪鱼大腹、海胆牛肉薄烧、季节怀石套餐</li>
+                            <li><span class="price">人均880元</span>，需提前3天通过美团预订</li>
+                        </ul>
+                        <div class="tips">可灵活替换为"四、备选日料餐厅库"中的其他餐厅</div>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">21:00</span> 返回璞瑅酒店休息
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <h3 class="day-title">Day 4：1月3日（周六）- 金石滩+滨海路+漫汤泉过夜</h3>
+
+                    <div class="timeline-item">
+                        <span class="time">08:30</span> 璞瑅酒店早餐
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">09:00</span> <span class="highlight">办理退房并寄存行李</span>（免费寄存至次日）
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">09:30</span> 前往<span class="location">金石滩</span>
+                        <ul>
+                            <li>地铁3号线，约1小时10分钟，票价8元</li>
+                            <li>必游：金石园、黄金海岸</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">12:30</span> 午餐：<span class="location">渔家味道</span>
+                        <ul>
+                            <li><strong>必点</strong>：鲍鱼小土豆、鲅鱼饺子、辣炒蚬子</li>
+                            <li><span class="price">人均90元</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">14:30</span> 滨海路观光
+                        <ul>
+                            <li>重点：燕窝岭观景台、傅家庄海滨</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">17:30</span> 前往<span class="location">漫汤泉（漫温泉）</span>
+                        <ul>
+                            <li><strong>必体验</strong>：
+                                <ul>
+                                    <li>水果自助：30余种时令水果无限畅吃</li>
+                                    <li>饮品自助：星巴克、巴黎水等近百种饮品</li>
+                                    <li>网红汗蒸房、PS5游戏区</li>
+                                    <li><span class="highlight">免费过夜</span>：休息大厅60+床位、100+格子间</li>
+                                </ul>
+                            </li>
+                            <li><span class="price">门票188元</span>（含水果+饮品+洗浴+过夜）</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">22:00</span> 放松流程：温泉池→汗蒸→看电影→格子间过夜
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <h3 class="day-title">Day 5：1月4日（周日）- 收尾与返程</h3>
+
+                    <div class="timeline-item">
+                        <span class="time">08:00</span> 漫汤泉早餐（自助形式）
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">09:30</span> <span class="location">中山广场</span>
+                        <ul>
+                            <li>打卡文艺复兴式、哥特式等百年欧式建筑</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">10:30</span> 返回璞瑅酒店取寄存行李
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">11:00</span> 天津街海鲜市场（伴手礼采购）
+                        <ul>
+                            <li>清单：现烤鱿鱼丝、真空包装海参、鲍鱼干、海鲜酱</li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">12:30</span> 午餐：<span class="location">品海楼</span>（天津街店）
+                        <ul>
+                            <li><strong>必点</strong>：鱼丸汤、三鲜焖子、油爆海螺</li>
+                            <li><span class="price">人均110元</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">13:00</span> 前往大连周水子国际机场
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">14:30</span> 起飞（南方航空CZ3607），飞行约4小时
+                    </div>
+
+                    <div class="timeline-item">
+                        <span class="time">18:30</span> 落地广州白云国际机场T2，<span class="highlight">结束愉快旅程</span> 🎉
+                    </div>
+                </div>
+            </div>
+
+            <!-- 二、必须提前预定的项目清单 -->
+            <div class="section" id="booking">
+                <h2 class="section-title">二、必须提前预定的项目清单</h2>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>项目</th>
+                            <th>使用日期</th>
+                            <th>预定时间</th>
+                            <th>预订方式</th>
+                            <th>关键信息</th>
+                            <th>不预订风险</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>清水至魂日料</strong></td>
+                            <td>Day 3 晚餐</td>
+                            <td>提前3天</td>
+                            <td>美团预订</td>
+                            <td>米其林标准怀石料理，人均880元</td>
+                            <td>元旦期间100%无位</td>
+                        </tr>
+                        <tr>
+                            <td><strong>喜鼎海胆水饺</strong></td>
+                            <td>Day 2 午餐</td>
+                            <td>提前1小时</td>
+                            <td>大众点评/美团取号</td>
+                            <td>星海广场店，人均160元</td>
+                            <td>排队1-2小时</td>
+                        </tr>
+                        <tr>
+                            <td><strong>圣亚海洋世界联票</strong></td>
+                            <td>Day 2 下午</td>
+                            <td>提前1天</td>
+                            <td>官方公众号/携程</td>
+                            <td>5馆联票，约150元</td>
+                            <td>现场票贵20元</td>
+                        </tr>
+                        <tr>
+                            <td><strong>老虎滩海洋公园</strong></td>
+                            <td>Day 3 上午</td>
+                            <td>提前1天</td>
+                            <td>官方平台预约</td>
+                            <td>冬季8折约152元</td>
+                            <td>现场可能售罄</td>
+                        </tr>
+                        <tr>
+                            <td><strong>漫汤泉过夜</strong></td>
+                            <td>Day 4 晚上</td>
+                            <td>提前1天</td>
+                            <td>美团/大众点评</td>
+                            <td>门票188元含水果自助+过夜</td>
+                            <td>可能满员</td>
+                        </tr>
+                        <tr>
+                            <td><strong>泉溪温泉搓澡</strong></td>
+                            <td>Day 2 晚上</td>
+                            <td>到店预约</td>
+                            <td>前台直接预约</td>
+                            <td>搓澡+奶搓89元</td>
+                            <td>高峰排队1小时</td>
+                        </tr>
+                        <tr>
+                            <td><strong>璞瑅酒店</strong></td>
+                            <td>Day 1-3</td>
+                            <td>已预订</td>
+                            <td>确认入住时间19:35后</td>
+                            <td>提供免费洗烘一体机</td>
+                            <td>避免房间被取消</td>
+                        </tr>
+                        <tr>
+                            <td><strong>返程机票</strong></td>
+                            <td>Day 5 下午</td>
+                            <td>已预订</td>
+                            <td>南方航空CZ3607</td>
+                            <td>提前2小时到机场</td>
+                            <td>误机风险</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 三、美食探索深度补充 -->
+            <div class="section" id="food">
+                <h2 class="section-title">三、美食探索深度补充</h2>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">1. Day 2 西安路正黄旗海鲜烧烤（必点升级）</h4>
+                    <ul>
+                        <li><strong>隐藏菜单</strong>：海肠捞饭（必点！每日限量50份，现杀海肠+五常大米+海鲜高汤）</li>
+                        <li><strong>点单技巧</strong>：生蚝选"特大号"（20元/只），比中号大30%，性价比更高</li>
+                        <li><strong>避坑提示</strong>：海鲜烧烤偏咸，点一份疙瘩汤（38元）解腻</li>
+                    </ul>
+                </div>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">2. 其他美食补充（热乎暖胃首选）</h4>
+                    <ul>
+                        <li><strong>Day 1 天津街糯米香</strong>：除了红豆粥和炸元宵，新增"驴打滚"（12元/份），黄豆粉+糯米+豆沙</li>
+                        <li><strong>Day 4 漫汤泉晚餐</strong>：餐厅"酸菜白肉炖血肠"（68元）必点，东北杀猪菜改良版</li>
+                        <li><strong>Day 5 天津街品海楼</strong>：百年老字号，新增"海鲜全家福锅"（168元），一锅包含海参、鲍鱼、虾、贝类</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 四、备选日料餐厅库 -->
+            <div class="section" id="alternative">
+                <h2 class="section-title">四、备选日料餐厅库（按品质/预算排序）</h2>
+
+                <p style="margin-bottom: 20px; color: #666;">精选大连<strong>4家顶级Omakase</strong>（含黑珍珠与高空日料），覆盖不同价位与特色，均适合替代或补充原计划的高端日料体验，<span class="highlight">全部需提前预约</span>。</p>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">1. 鮨陽·寿司阳（黑珍珠入围，大连Omakase天花板）</h4>
+                    <div class="restaurant-info">
+                        <div class="info-item">
+                            📍 <span class="info-label">位置：</span>中山区人民路龙泉街3号（距璞瑅酒店步行15分钟）
+                        </div>
+                        <div class="info-item">
+                            ⏰ <span class="info-label">营业时间：</span>11:30-14:00，17:30-22:00
+                        </div>
+                        <div class="info-item">
+                            💰 <span class="info-label">价格：</span>980元（午市）/1380元/1580元（晚市）
+                        </div>
+                        <div class="info-item">
+                            📞 <span class="info-label">预约：</span>提前3天通过美团预订
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge">板前料理</span>
+                        <span class="badge">日本空运食材</span>
+                        <span class="badge">仅8席</span>
+                    </div>
+                    <ul style="margin-top: 15px;">
+                        <li><strong>核心特色</strong>：主厨为前东京银座寿司名店核心团队，每贯寿司捏制后10秒内上桌</li>
+                        <li><strong>必尝招牌</strong>：北海道毛蟹醋啫喱、野生金枪鱼手握、海胆热狗、玉子烧</li>
+                        <li><strong>适配行程</strong>：完美替代Day3原计划的清水至魂，步行可达，性价比更高</li>
+                    </ul>
+                </div>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">2. 四葉居（高空日料新标杆，和牛+海鲜双绝）</h4>
+                    <div class="restaurant-info">
+                        <div class="info-item">
+                            📍 <span class="info-label">位置：</span>中山区港兴路6号大连中心·裕景58楼
+                        </div>
+                        <div class="info-item">
+                            ⏰ <span class="info-label">营业时间：</span>11:00-14:30，17:00-22:00
+                        </div>
+                        <div class="info-item">
+                            💰 <span class="info-label">价格：</span>1280元/位（含和牛十二吃+海鲜Omakase）
+                        </div>
+                        <div class="info-item">
+                            📞 <span class="info-label">预约：</span>提前2天通过美团预订，需预付50%定金
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge">58楼高空</span>
+                        <span class="badge">和牛十二吃</span>
+                        <span class="badge">夜景绝佳</span>
+                    </div>
+                    <ul style="margin-top: 15px;">
+                        <li><strong>核心特色</strong>：58楼高空俯瞰大连港+星海广场夜景，冬季雪景更绝</li>
+                        <li><strong>必尝</strong>：M9+和牛寿喜烧（裹无菌蛋液）、蓝鳍金枪鱼大腹手握、北海道海胆蒸蛋</li>
+                    </ul>
+                </div>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">3. 龙鮨（活海胆Omakase专家，本地海鲜融合）</h4>
+                    <div class="restaurant-info">
+                        <div class="info-item">
+                            📍 <span class="info-label">位置：</span>中山区东港商务区长江东路88号
+                        </div>
+                        <div class="info-item">
+                            ⏰ <span class="info-label">营业时间：</span>11:00-14:00，17:00-22:30
+                        </div>
+                        <div class="info-item">
+                            💰 <span class="info-label">价格：</span>798元/位（含活海胆无限续+10贯寿司）
+                        </div>
+                        <div class="info-item">
+                            📞 <span class="info-label">预约：</span>提前1天通过美团/大众点评预约
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge price-badge">性价比极高</span>
+                        <span class="badge">活海胆无限续</span>
+                        <span class="badge">本地海鲜</span>
+                    </div>
+                    <ul style="margin-top: 15px;">
+                        <li><strong>核心特色</strong>：大连海域直供活海胆，现捞现开，金黄绵密，入口即化</li>
+                        <li><strong>必尝</strong>："海胆热狗"（北海道海胆+大连虾夷扇贝）、野生金枪鱼赤身、毛蟹醋啫喱</li>
+                    </ul>
+                </div>
+
+                <div class="restaurant-card">
+                    <h4 class="restaurant-title">4. 九叶寿司（高性价比Omakase，新手友好）</h4>
+                    <div class="restaurant-info">
+                        <div class="info-item">
+                            📍 <span class="info-label">位置：</span>沙河口区西安路139号天兴罗斯福B1层
+                        </div>
+                        <div class="info-item">
+                            ⏰ <span class="info-label">营业时间：</span>11:00-21:00
+                        </div>
+                        <div class="info-item">
+                            💰 <span class="info-label">价格：</span>晚市290元/位，午市238元/位
+                        </div>
+                        <div class="info-item">
+                            📞 <span class="info-label">预约：</span>到店可约，高峰时段提前1小时美团取号
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge price-badge">入门首选</span>
+                        <span class="badge">有包间</span>
+                        <span class="badge">无需板前预约</span>
+                    </div>
+                    <ul style="margin-top: 15px;">
+                        <li><strong>核心特色</strong>：醋米饭与酱油为独家配方，玉子烧松软如海绵</li>
+                        <li><strong>适合</strong>：初次体验Omakase，或作为行程中的"轻日料"补充</li>
+                    </ul>
+                </div>
+
+                <div class="tips" style="margin-top: 30px;">
+                    <strong>预订优先级建议：</strong><br>
+                    1. <strong>首选</strong>：鮨陽·寿司阳（黑珍珠品质，位置最佳）<br>
+                    2. <strong>备选</strong>：四葉居（高空景观+和牛特色）<br>
+                    3. <strong>提醒</strong>：所有Omakase均为预约制，元旦期间席位紧张<br>
+                    4. <strong>灵活选择</strong>：以上餐厅可根据实际预订情况和当天心情灵活调整
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
