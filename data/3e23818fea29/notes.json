@@ -18,9 +18,17 @@
   {
     "id": "1766043131110thkl5uoyz",
     "title": "模型训练",
-    "content": "bash tasks/math_rl_v3/train_agent_coder_32b_dyk/mpirun-agent.sh\ntasks/math_rl_v3/qwen_test/mpi-clear.sh\nnvidia-smi",
+    "content": "bash tasks/math_rl_v3/grpo_agent_4b/mpirun-agent.sh\ntasks/math_rl_v3/qwen_test/mpi-clear.sh\nnvidia-smi",
     "color": "blue",
     "createdAt": "2025-12-18T07:32:11.110Z",
-    "updatedAt": "2025-12-18T13:59:38.036Z"
+    "updatedAt": "2026-01-05T12:02:58.814Z"
+  },
+  {
+    "id": "17677781590288h9tlq532",
+    "title": "proxy",
+    "content": "node_tls_reject_unauthorized=0",
+    "color": "green",
+    "createdAt": "2026-01-07T09:29:19.028Z",
+    "updatedAt": "2026-01-07T09:29:19.028Z"
   }
 ]

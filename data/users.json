@@ -35,6 +35,18 @@
       "passwordHash": "$2b$10$311Ern0Gwszk2JMM9dS6jeOIsIy1.oIjSmWFiCxwG5HxgHzFcmFny",
       "createdAt": "2025-12-04T04:25:13.322Z",
       "isAdmin": false
+    },
+    {
+      "email": "yukinhe@tencent.com",
+      "passwordHash": "$2b$10$22fnXinigt5pbmUyqkXcSe.6yggtwohoDS6eVuh2gwH4e.lRMibRa",
+      "createdAt": "2026-01-06T13:53:29.214Z",
+      "isAdmin": false
+    },
+    {
+      "email": "zihanhua@tencent.com",
+      "passwordHash": "$2b$10$/XxvnPk09Yh7Ho0MxXuCceWQO1.balDEJwZwCSe9xUNTIrU61lXOW",
+      "createdAt": "2026-01-09T16:19:07.429Z",
+      "isAdmin": false
     }
   ]
 }

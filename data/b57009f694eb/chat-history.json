@@ -1,0 +1,17 @@
+[
+  {
+    "id": "1767975916328",
+    "title": "帮我加一个获取sourcemap mcp...",
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我加一个获取sourcemap mcp 的todo"
+      },
+      {
+        "role": "assistant",
+        "content": "已添加完成！我在「工具」分类下添加了「获取 sourcemap mcp」这个任务。\n\n这个任务是否需要拆解成更具体的子任务？比如：\n- 调研 sourcemap mcp 的实现方案\n- 配置 MCP 服务器\n- 测试 sourcemap 获取功能"
+      }
+    ],
+    "createdAt": 1767975916328
+  }
+]
