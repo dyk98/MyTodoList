@@ -11,7 +11,8 @@ export interface TodoItem {
 // 日程任务（带项目信息的引用）
 export interface ScheduleTask {
   item: TodoItem
-  projectName: string      // 所属项目名
+  projectName: string      // 所属项目名或周标题
+  archived?: boolean       // 是否来自历史周（已归档）
 }
 
 // 项目分类（待办池中的项目）

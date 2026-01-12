@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Checkbox, Typography, DatePicker, Calendar, Badge, Empty } from 'antd'
+import { Button, Checkbox, Typography, DatePicker, Calendar, Badge, Empty, Tag, Tooltip } from 'antd'
 import { LeftOutlined, RightOutlined, DownOutlined, UpOutlined, CloseOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -159,12 +159,21 @@ export default function SchedulePanel({
               {projectTasks.map((task) => (
                 <div
                   key={task.item.lineIndex}
-                  className="schedule-task-item"
+                  className={`schedule-task-item ${task.archived ? 'schedule-task-archived' : ''}`}
                 >
-                  <Checkbox
-                    checked={task.item.completed}
-                    onChange={() => onToggle(task.item.lineIndex)}
-                  />
+                  {task.archived ? (
+                    <Tooltip title="已归档，无法修改" mouseEnterDelay={0.1}>
+                      <Checkbox
+                        checked={task.item.completed}
+                        disabled
+                      />
+                    </Tooltip>
+                  ) : (
+                    <Checkbox
+                      checked={task.item.completed}
+                      onChange={() => onToggle(task.item.lineIndex)}
+                    />
+                  )}
                   <Text
                     delete={task.item.completed}
                     type={task.item.completed ? 'secondary' : undefined}
@@ -172,6 +181,11 @@ export default function SchedulePanel({
                   >
                     {task.item.content}
                   </Text>
+                  {task.archived && (
+                    <Tag color="default" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', marginRight: 4 }}>
+                      已归档
+                    </Tag>
+                  )}
                   <Button
                     type="text"
                     size="small"

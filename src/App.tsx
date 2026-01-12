@@ -266,17 +266,23 @@ function App() {
     if (!data) return []
     const tasks: ScheduleTask[] = []
 
-    const collectTasks = (items: TodoItem[], projectName: string) => {
+    const collectTasks = (items: TodoItem[], projectName: string, archived: boolean) => {
       for (const item of items) {
         if (item.todayDates?.includes(date)) {
-          tasks.push({ item, projectName })
+          tasks.push({ item, projectName, archived })
         }
-        collectTasks(item.children, projectName)
+        collectTasks(item.children, projectName, archived)
       }
     }
 
+    // 从待办池提取
     for (const project of data.pool) {
-      collectTasks(project.items, project.name)
+      collectTasks(project.items, project.name, false)
+    }
+
+    // 从历史周提取
+    for (const week of data.weeks) {
+      collectTasks(week.items, week.title, true)
     }
 
     return tasks
@@ -295,8 +301,14 @@ function App() {
       }
     }
 
+    // 从待办池提取
     for (const project of data.pool) {
       collectDates(project.items)
+    }
+
+    // 从历史周提取
+    for (const week of data.weeks) {
+      collectDates(week.items)
     }
 
     return Array.from(dates)

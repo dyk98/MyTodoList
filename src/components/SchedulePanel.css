@@ -200,6 +200,15 @@
   color: #ff4d4f;
 }
 
+.schedule-task-archived {
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.schedule-task-archived .schedule-task-content {
+  color: #999;
+}
+
 /* 移动端样式 */
 @media (max-width: 768px) {
   .schedule-panel {
