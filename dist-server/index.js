@@ -1462,6 +1462,77 @@ app.post('/api/ai/chat', optionalAuthMiddleware, async (req, res) => {
         handleError(res, error, 'POST /api/ai/chat');
     }
 });
+// ========== 今日任务相关 API ==========
+// 设置今日任务（添加 @today:YYYY-MM-DD 标记）
+app.post('/api/todo/set-today', authMiddleware, async (req, res) => {
+    try {
+        const { lineIndex, date, year } = req.body;
+        const targetYear = resolveYear(year);
+        if (typeof lineIndex !== 'number') {
+            return res.status(400).json({ success: false, error: 'lineIndex is required' });
+        }
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({ success: false, error: 'date is required (format: YYYY-MM-DD)' });
+        }
+        const fileData = await readTodoFileWithGuard(res, req.user.email, targetYear, false);
+        if (!fileData)
+            return;
+        const { content, status } = fileData;
+        const lines = content.split('\n');
+        if (lineIndex < 0 || lineIndex >= lines.length) {
+            return res.status(400).json({ success: false, error: 'Invalid lineIndex' });
+        }
+        const line = lines[lineIndex];
+        if (!isTaskLine(line)) {
+            return res.status(400).json({ success: false, error: 'Line is not a todo item' });
+        }
+        // 检查是否已有该日期的标记
+        const todayTag = `@today:${date}`;
+        if (line.includes(todayTag)) {
+            return res.json({ success: true, newContent: lines.join('\n') }); // 已存在，无需修改
+        }
+        // 在行末添加标记
+        lines[lineIndex] = line + ` ${todayTag}`;
+        await safeWriteFile(status.filePath, lines.join('\n'));
+        res.json({ success: true, newContent: lines.join('\n') });
+    }
+    catch (error) {
+        handleError(res, error, 'POST /api/todo/set-today');
+    }
+});
+// 移除今日任务标记
+app.delete('/api/todo/remove-today', authMiddleware, async (req, res) => {
+    try {
+        const { lineIndex, date, year } = req.body;
+        const targetYear = resolveYear(year);
+        if (typeof lineIndex !== 'number') {
+            return res.status(400).json({ success: false, error: 'lineIndex is required' });
+        }
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({ success: false, error: 'date is required (format: YYYY-MM-DD)' });
+        }
+        const fileData = await readTodoFileWithGuard(res, req.user.email, targetYear, false);
+        if (!fileData)
+            return;
+        const { content, status } = fileData;
+        const lines = content.split('\n');
+        if (lineIndex < 0 || lineIndex >= lines.length) {
+            return res.status(400).json({ success: false, error: 'Invalid lineIndex' });
+        }
+        const line = lines[lineIndex];
+        if (!isTaskLine(line)) {
+            return res.status(400).json({ success: false, error: 'Line is not a todo item' });
+        }
+        // 移除指定日期的标记
+        const todayTag = `@today:${date}`;
+        lines[lineIndex] = line.replace(new RegExp(`\\s*${todayTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'), '');
+        await safeWriteFile(status.filePath, lines.join('\n'));
+        res.json({ success: true, newContent: lines.join('\n') });
+    }
+    catch (error) {
+        handleError(res, error, 'DELETE /api/todo/remove-today');
+    }
+});
 // ========== 便利贴相关 API ==========
 // 获取所有便利贴
 app.get('/api/notes', optionalAuthMiddleware, async (req, res) => {

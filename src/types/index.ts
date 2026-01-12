@@ -1,10 +1,17 @@
 // 单个任务项
 export interface TodoItem {
   lineIndex: number        // 在原文件中的行号
-  content: string          // 任务内容（不含 - [ ] 前缀）
+  content: string          // 任务内容（不含 - [ ] 前缀和 @today 标记）
   completed: boolean       // 是否完成
   indent: number           // 缩进层级（0 = 顶级，1 = 子任务...）
   children: TodoItem[]     // 子任务
+  todayDates?: string[]    // 日程日期数组，格式 YYYY-MM-DD
+}
+
+// 日程任务（带项目信息的引用）
+export interface ScheduleTask {
+  item: TodoItem
+  projectName: string      // 所属项目名
 }
 
 // 项目分类（待办池中的项目）

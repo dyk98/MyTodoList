@@ -5,13 +5,22 @@ function parseTodoLine(line: string, lineIndex: number): TodoItem | null {
   const match = line.match(/^(\s*)- \[([ x])\]\s*(.*)$/)
   if (!match) return null
 
-  const [, indent, status, content] = match
+  const [, indent, status, rawContent] = match
+
+  // 解析 @today:YYYY-MM-DD 标记
+  const todayMatches = rawContent.matchAll(/@today:(\d{4}-\d{2}-\d{2})/g)
+  const todayDates = Array.from(todayMatches, m => m[1])
+
+  // 移除标记得到纯内容
+  const content = rawContent.replace(/@today:\d{4}-\d{2}-\d{2}/g, '').trim()
+
   return {
     lineIndex,
-    content: content.trim(),
+    content,
     completed: status === 'x',
     indent: Math.floor(indent.length / 4),
     children: [],
+    todayDates: todayDates.length > 0 ? todayDates : undefined,
   }
 }
 
@@ -148,7 +157,8 @@ export function parseTodoMd(content: string): ParsedTodo {
 export function serializeTodoItem(item: TodoItem, indent = 0): string {
   const prefix = '    '.repeat(indent)
   const status = item.completed ? 'x' : ' '
-  let result = `${prefix}- [${status}] ${item.content}\n`
+  const todayTags = item.todayDates?.map(d => ` @today:${d}`).join('') || ''
+  let result = `${prefix}- [${status}] ${item.content}${todayTags}\n`
 
   for (const child of item.children) {
     result += serializeTodoItem(child, indent + 1)

@@ -33,10 +33,11 @@ interface Props {
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
   onAddSubtask?: (parentLineIndex: number, task: string) => Promise<void>
+  onSetToday?: (lineIndex: number, date: string) => Promise<void>
   readOnly?: boolean
 }
 
-export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onMove, onEditMarkdown, onEdit, onDelete, onAddSubtask, readOnly = false }: Props) {
+export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd, onMove, onEditMarkdown, onEdit, onDelete, onAddSubtask, onSetToday, readOnly = false }: Props) {
   const [adding, setAdding] = useState(false)
   const [newTask, setNewTask] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('')
@@ -300,6 +301,7 @@ export function TodoPool({ projects, currentYear, onToggle, onAdd, onProjectAdd,
               onEdit={onEdit}
               onDelete={onDelete}
               onAddSubtask={onAddSubtask}
+              onSetToday={onSetToday}
               dragHint={dragHint}
               readOnly={readOnly}
             />

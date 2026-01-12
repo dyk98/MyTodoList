@@ -344,6 +344,36 @@ export async function weekSettle(year?: number): Promise<{ newContent: string; s
   return { newContent: data.newContent, settledCount: data.settledCount || 0, weekTitle: data.weekTitle || '' }
 }
 
+// ========== 今日任务相关 API ==========
+
+// 设置今日任务
+export async function setTodayDate(lineIndex: number, date: string, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/set-today`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ lineIndex, date, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to set today date')
+  }
+  return data.newContent
+}
+
+// 移除今日任务标记
+export async function removeTodayDate(lineIndex: number, date: string, year?: number): Promise<string> {
+  const res = await fetch(`${BASE_URL}/todo/remove-today`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ lineIndex, date, year }),
+  })
+  const data: ApiResponse = await res.json()
+  if (!data.success || !data.newContent) {
+    throw new Error(data.error || 'Failed to remove today date')
+  }
+  return data.newContent
+}
+
 // 获取文档列表
 export async function fetchDocs(): Promise<{ name: string; filename: string }[]> {
   const res = await fetch(`${BASE_URL}/docs`, {

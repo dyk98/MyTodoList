@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Layout, Spin, Alert, Divider, Select, Space, Dropdown, Button, Modal, Drawer, Tabs, message, Input, Tag, App as AntApp } from 'antd'
-import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined } from '@ant-design/icons'
+import { FileTextOutlined, CalendarOutlined, PlusOutlined, UploadOutlined, UserOutlined, SettingOutlined, LoginOutlined, LogoutOutlined, MenuOutlined, PushpinOutlined, ScheduleOutlined } from '@ant-design/icons'
 import { TodoPool, WeekBlock, DocViewer, AiChatBubble, AuthModal, SettingsModal, YearMigrationModal } from '@/components'
 import NotesPanel from '@/components/NotesPanel'
+import SchedulePanel from '@/components/SchedulePanel'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-import { fetchTodo, fetchTodoStatus, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, moveTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo, createTodoYear } from '@/utils/api'
+import { fetchTodo, fetchTodoStatus, fetchYears, toggleTodo, addTodo, addSubtask, addProject, fetchDocs, weekSettle, moveTodo, addWeek, uploadDoc, editTodo, deleteTodo, updateTodo, createTodoYear, setTodayDate, removeTodayDate } from '@/utils/api'
 import { parseTodoMd } from '@/utils/parser'
 import { useAuth } from '@/contexts/AuthContext'
-import type { ParsedTodo, ProjectGroup, TodoItem } from '@/types'
+import type { ParsedTodo, ProjectGroup, TodoItem, ScheduleTask } from '@/types'
 import MarkdownPreview from '@uiw/react-markdown-preview'
 
 const { Header, Content } = Layout
@@ -109,6 +110,12 @@ function App() {
 
   // 便利贴相关状态
   const [noteModalOpen, setNoteModalOpen] = useState(false)
+
+  // 日程相关状态
+  const [scheduleDate, setScheduleDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  )
+  const [schedulePanelCollapsed, setSchedulePanelCollapsed] = useState(true)
 
   // 新增周相关状态
   const [addWeekModalOpen, setAddWeekModalOpen] = useState(false)
@@ -252,6 +259,68 @@ function App() {
     const newContent = await addSubtask(task, parentLineIndex, currentYear)
     const parsed = parseTodoMd(newContent)
     setData(parsed)
+  }
+
+  // 日程相关处理函数
+  const getScheduleTasks = useCallback((date: string): ScheduleTask[] => {
+    if (!data) return []
+    const tasks: ScheduleTask[] = []
+
+    const collectTasks = (items: TodoItem[], projectName: string) => {
+      for (const item of items) {
+        if (item.todayDates?.includes(date)) {
+          tasks.push({ item, projectName })
+        }
+        collectTasks(item.children, projectName)
+      }
+    }
+
+    for (const project of data.pool) {
+      collectTasks(project.items, project.name)
+    }
+
+    return tasks
+  }, [data])
+
+  const getAllDatesWithTasks = useCallback((): string[] => {
+    if (!data) return []
+    const dates = new Set<string>()
+
+    const collectDates = (items: TodoItem[]) => {
+      for (const item of items) {
+        if (item.todayDates) {
+          item.todayDates.forEach(d => dates.add(d))
+        }
+        collectDates(item.children)
+      }
+    }
+
+    for (const project of data.pool) {
+      collectDates(project.items)
+    }
+
+    return Array.from(dates)
+  }, [data])
+
+  const handleSetToday = async (lineIndex: number, date: string) => {
+    try {
+      const newContent = await setTodayDate(lineIndex, date, currentYear)
+      const parsed = parseTodoMd(newContent)
+      setData(parsed)
+    } catch (e) {
+      message.error(String(e))
+    }
+  }
+
+  const handleRemoveFromSchedule = async (lineIndex: number, date: string) => {
+    try {
+      const newContent = await removeTodayDate(lineIndex, date, currentYear)
+      const parsed = parseTodoMd(newContent)
+      setData(parsed)
+      message.success('已从日程中移除')
+    } catch (e) {
+      message.error(String(e))
+    }
   }
 
   const handleMigrationCancel = () => {
@@ -439,6 +508,12 @@ function App() {
   const mobileMenuItems = [
     ...(!isDemo ? [
       {
+        key: 'schedule',
+        label: '日程',
+        icon: <ScheduleOutlined />,
+        onClick: () => setSchedulePanelCollapsed(false),
+      },
+      {
         key: 'addNote',
         label: '新增便利贴',
         icon: <PushpinOutlined />,
@@ -504,6 +579,12 @@ function App() {
               <>
                 {!isDemo && (
                   <>
+                    <Button
+                      icon={<ScheduleOutlined />}
+                      onClick={() => setSchedulePanelCollapsed(!schedulePanelCollapsed)}
+                    >
+                      日程
+                    </Button>
                     <Button
                       icon={<PushpinOutlined />}
                       onClick={() => setNoteModalOpen(true)}
@@ -611,6 +692,7 @@ function App() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onAddSubtask={handleAddSubtask}
+              onSetToday={handleSetToday}
               readOnly={isDemo}
             />
 
@@ -809,6 +891,21 @@ function App() {
         showModal={noteModalOpen}
         onCloseModal={() => setNoteModalOpen(false)}
       />
+
+      {/* 日程面板 - 浮动在左侧 */}
+      {!isDemo && (
+        <SchedulePanel
+          tasks={getScheduleTasks(scheduleDate)}
+          selectedDate={scheduleDate}
+          onDateChange={setScheduleDate}
+          onToggle={handleToggle}
+          onRemoveFromSchedule={handleRemoveFromSchedule}
+          collapsed={schedulePanelCollapsed}
+          onCollapse={setSchedulePanelCollapsed}
+          datesWithTasks={getAllDatesWithTasks()}
+          isDemo={isDemo}
+        />
+      )}
     </Layout>
   )
 }

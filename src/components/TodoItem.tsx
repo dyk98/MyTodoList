@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Checkbox, Typography, Button, Input, Popconfirm, Space, message } from 'antd'
-import { HolderOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons'
+import { Checkbox, Typography, Button, Input, Popconfirm, Space, message, DatePicker, Tooltip } from 'antd'
+import { HolderOutlined, EditOutlined, DeleteOutlined, CheckOutlined, CloseOutlined, PlusOutlined, CalendarOutlined } from '@ant-design/icons'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import dayjs from 'dayjs'
 import type { TodoItem as TodoItemType } from '@/types'
 
 const { Text } = Typography
@@ -22,15 +23,17 @@ interface Props {
   onEdit?: (lineIndex: number, newContent: string) => Promise<void>
   onDelete?: (lineIndex: number) => Promise<void>
   onAddSubtask?: (parentLineIndex: number, task: string) => Promise<void>
+  onSetToday?: (lineIndex: number, date: string) => Promise<void>
   dragHint?: TodoItemDragHint | null
   readOnly?: boolean
 }
 
-export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragHint, readOnly = false }: Props) {
+export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, onSetToday, dragHint, readOnly = false }: Props) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.content)
   const [addingSubtask, setAddingSubtask] = useState(false)
   const [subtaskValue, setSubtaskValue] = useState('')
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
 
   const {
     attributes,
@@ -81,6 +84,18 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragH
         message.success('子任务添加成功')
       } catch (e) {
         message.error('添加失败: ' + String(e))
+      }
+    }
+  }
+
+  const handleSetToday = async (date: dayjs.Dayjs | null) => {
+    if (date && onSetToday) {
+      try {
+        await onSetToday(item.lineIndex, date.format('YYYY-MM-DD'))
+        setDatePickerOpen(false)
+        message.success('已添加到日程')
+      } catch (e) {
+        message.error('设置失败: ' + String(e))
       }
     }
   }
@@ -196,19 +211,37 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragH
             {!readOnly && (
               <div className="todo-item-actions-bubble">
                 <Space size={4}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => setAddingSubtask(true)}
-                    title="添加子任务"
+                  <DatePicker
+                    open={datePickerOpen}
+                    onOpenChange={setDatePickerOpen}
+                    onChange={handleSetToday}
+                    defaultValue={dayjs()}
+                    style={{ width: 0, height: 0, padding: 0, border: 'none', visibility: 'hidden', position: 'absolute' }}
                   />
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditing(true)}
-                  />
+                  <Tooltip title="添加到日程" mouseEnterDelay={0.1}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CalendarOutlined />}
+                      onClick={() => setDatePickerOpen(true)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="添加子任务" mouseEnterDelay={0.1}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => setAddingSubtask(true)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="编辑任务" mouseEnterDelay={0.1}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => setEditing(true)}
+                    />
+                  </Tooltip>
                   <Popconfirm
                     title="确定删除此任务？"
                     description={item.children.length > 0 ? '子任务也会一并删除' : undefined}
@@ -216,12 +249,14 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragH
                     okText="删除"
                     cancelText="取消"
                   >
-                    <Button
-                      type="text"
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                    />
+                    <Tooltip title="删除任务" mouseEnterDelay={0.1}>
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                      />
+                    </Tooltip>
                   </Popconfirm>
                 </Space>
               </div>
@@ -255,6 +290,7 @@ export function TodoItem({ item, onToggle, onEdit, onDelete, onAddSubtask, dragH
               onEdit={onEdit}
               onDelete={onDelete}
               onAddSubtask={onAddSubtask}
+              onSetToday={onSetToday}
               dragHint={dragHint}
               readOnly={readOnly}
             />
