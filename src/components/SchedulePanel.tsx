@@ -156,21 +156,22 @@ export default function SchedulePanel({
               if (info.type === 'date') {
                 const dateStr = (current as Dayjs).format('YYYY-MM-DD')
                 const count = taskCountByDate[dateStr] || 0
-                const bgColor = getTaskCountColor(count)
-                const textColor = count >= 3 ? '#fff' : undefined
-                return (
-                  <div
-                    className="ant-picker-cell-inner"
-                    style={{
-                      background: bgColor,
-                      color: textColor,
-                      borderRadius: 4,
-                    }}
-                    title={count > 0 ? `${count} 个任务` : undefined}
-                  >
-                    {(current as Dayjs).date()}
-                  </div>
-                )
+                if (count > 0) {
+                  const bgColor = getTaskCountColor(count)
+                  const textColor = count >= 3 ? '#fff' : undefined
+                  return (
+                    <div
+                      className="ant-picker-cell-inner schedule-date-has-task"
+                      style={{
+                        background: bgColor,
+                        color: textColor,
+                      }}
+                      title={`${count} 个任务`}
+                    >
+                      {(current as Dayjs).date()}
+                    </div>
+                  )
+                }
               }
               return info.originNode
             }}

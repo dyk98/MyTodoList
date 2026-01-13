@@ -91,6 +91,10 @@
   cursor: pointer;
 }
 
+.schedule-date-has-task {
+  border-radius: 4px;
+}
+
 .schedule-panel-content {
   flex: 1;
   overflow-y: auto;
