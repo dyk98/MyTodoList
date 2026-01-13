@@ -47,6 +47,24 @@ export default function SchedulePanel({
     return acc
   }, {} as Record<string, ScheduleTask[]>)
 
+  // 排序后的有任务日期列表
+  const sortedDates = [...datesWithTasks].sort()
+
+  // 获取上一个有任务的日期
+  const getPrevDate = () => {
+    const prevDates = sortedDates.filter(d => d < selectedDate)
+    return prevDates.length > 0 ? prevDates[prevDates.length - 1] : null
+  }
+
+  // 获取下一个有任务的日期
+  const getNextDate = () => {
+    const nextDates = sortedDates.filter(d => d > selectedDate)
+    return nextDates.length > 0 ? nextDates[0] : null
+  }
+
+  const prevDate = getPrevDate()
+  const nextDate = getNextDate()
+
   // 日历单元格渲染
   const dateCellRender = (date: Dayjs) => {
     const dateStr = date.format('YYYY-MM-DD')
@@ -101,45 +119,65 @@ export default function SchedulePanel({
         </div>
 
         <div className="schedule-panel-header">
-        <DatePicker
-          value={dayjs(selectedDate)}
-          onChange={(date) => {
-            if (date) {
-              onDateChange(date.format('YYYY-MM-DD'))
-              setCalendarOpen(false)
-            }
-          }}
-          open={calendarOpen}
-          onOpenChange={setCalendarOpen}
-          format={() => formatDateDisplay(selectedDate)}
-          allowClear={false}
-          suffixIcon={null}
-          className="schedule-date-picker"
-          cellRender={(current, info) => {
-            if (info.type === 'date') {
-              const dateStr = (current as Dayjs).format('YYYY-MM-DD')
-              const hasTasks = datesWithTasks.includes(dateStr)
-              return (
-                <div className="ant-picker-cell-inner">
-                  {(current as Dayjs).date()}
-                  {hasTasks && <span className="schedule-date-dot" />}
-                </div>
-              )
-            }
-            return info.originNode
-          }}
-        />
-        {!isToday && (
-          <Button
-            type="link"
-            size="small"
-            onClick={() => onDateChange(today)}
-            style={{ padding: '0 4px', fontSize: 12 }}
-          >
-            回到今天
-          </Button>
-        )}
-      </div>
+          <Tooltip title={prevDate ? `上一个: ${dayjs(prevDate).format('M月D日')}` : '没有更早的日程'} mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              size="small"
+              icon={<LeftOutlined />}
+              disabled={!prevDate}
+              onClick={() => prevDate && onDateChange(prevDate)}
+              className="schedule-nav-btn"
+            />
+          </Tooltip>
+          <DatePicker
+            value={dayjs(selectedDate)}
+            onChange={(date) => {
+              if (date) {
+                onDateChange(date.format('YYYY-MM-DD'))
+                setCalendarOpen(false)
+              }
+            }}
+            open={calendarOpen}
+            onOpenChange={setCalendarOpen}
+            format={() => formatDateDisplay(selectedDate)}
+            allowClear={false}
+            suffixIcon={null}
+            className="schedule-date-picker"
+            cellRender={(current, info) => {
+              if (info.type === 'date') {
+                const dateStr = (current as Dayjs).format('YYYY-MM-DD')
+                const hasTasks = datesWithTasks.includes(dateStr)
+                return (
+                  <div className="ant-picker-cell-inner">
+                    {(current as Dayjs).date()}
+                    {hasTasks && <span className="schedule-date-dot" />}
+                  </div>
+                )
+              }
+              return info.originNode
+            }}
+          />
+          <Tooltip title={nextDate ? `下一个: ${dayjs(nextDate).format('M月D日')}` : '没有更晚的日程'} mouseEnterDelay={0.1}>
+            <Button
+              type="text"
+              size="small"
+              icon={<RightOutlined />}
+              disabled={!nextDate}
+              onClick={() => nextDate && onDateChange(nextDate)}
+              className="schedule-nav-btn"
+            />
+          </Tooltip>
+          {!isToday && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => onDateChange(today)}
+              style={{ padding: '0 4px', fontSize: 12 }}
+            >
+              今天
+            </Button>
+          )}
+        </div>
 
       <div className="schedule-panel-content">
         {isDemo ? (
