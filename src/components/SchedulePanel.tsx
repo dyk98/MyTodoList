@@ -17,7 +17,7 @@ interface SchedulePanelProps {
   onRemoveFromSchedule: (lineIndex: number, date: string) => void
   collapsed: boolean
   onCollapse: (collapsed: boolean) => void
-  datesWithTasks: string[]
+  taskCountByDate: Record<string, number>
   isDemo: boolean
 }
 
@@ -29,7 +29,7 @@ export default function SchedulePanel({
   onRemoveFromSchedule,
   collapsed,
   onCollapse,
-  datesWithTasks,
+  taskCountByDate,
   isDemo,
 }: SchedulePanelProps) {
   const isMobile = useIsMobile()
@@ -48,7 +48,7 @@ export default function SchedulePanel({
   }, {} as Record<string, ScheduleTask[]>)
 
   // 排序后的有任务日期列表
-  const sortedDates = [...datesWithTasks].sort()
+  const sortedDates = Object.keys(taskCountByDate).sort()
 
   // 获取上一个有任务的日期
   const getPrevDate = () => {
@@ -64,6 +64,15 @@ export default function SchedulePanel({
 
   const prevDate = getPrevDate()
   const nextDate = getNextDate()
+
+  // 根据任务数量获取背景色（类似 GitHub 贡献图）
+  const getTaskCountColor = (count: number): string => {
+    if (count === 0) return 'transparent'
+    if (count === 1) return '#d1e9ff'  // 浅蓝
+    if (count === 2) return '#91caff'  // 中浅蓝
+    if (count <= 4) return '#4096ff'   // 中蓝
+    return '#0958d9'                    // 深蓝
+  }
 
   // 日历单元格渲染
   const dateCellRender = (date: Dayjs) => {
@@ -146,11 +155,20 @@ export default function SchedulePanel({
             cellRender={(current, info) => {
               if (info.type === 'date') {
                 const dateStr = (current as Dayjs).format('YYYY-MM-DD')
-                const hasTasks = datesWithTasks.includes(dateStr)
+                const count = taskCountByDate[dateStr] || 0
+                const bgColor = getTaskCountColor(count)
+                const textColor = count >= 3 ? '#fff' : undefined
                 return (
-                  <div className="ant-picker-cell-inner">
+                  <div
+                    className="ant-picker-cell-inner"
+                    style={{
+                      background: bgColor,
+                      color: textColor,
+                      borderRadius: 4,
+                    }}
+                    title={count > 0 ? `${count} 个任务` : undefined}
+                  >
                     {(current as Dayjs).date()}
-                    {hasTasks && <span className="schedule-date-dot" />}
                   </div>
                 )
               }

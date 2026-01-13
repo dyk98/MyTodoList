@@ -288,14 +288,16 @@ function App() {
     return tasks
   }, [data])
 
-  const getAllDatesWithTasks = useCallback((): string[] => {
-    if (!data) return []
-    const dates = new Set<string>()
+  const getTaskCountByDate = useCallback((): Record<string, number> => {
+    if (!data) return {}
+    const counts: Record<string, number> = {}
 
     const collectDates = (items: TodoItem[]) => {
       for (const item of items) {
         if (item.todayDates) {
-          item.todayDates.forEach(d => dates.add(d))
+          item.todayDates.forEach(d => {
+            counts[d] = (counts[d] || 0) + 1
+          })
         }
         collectDates(item.children)
       }
@@ -311,7 +313,7 @@ function App() {
       collectDates(week.items)
     }
 
-    return Array.from(dates)
+    return counts
   }, [data])
 
   const handleSetToday = async (lineIndex: number, date: string) => {
@@ -914,7 +916,7 @@ function App() {
           onRemoveFromSchedule={handleRemoveFromSchedule}
           collapsed={schedulePanelCollapsed}
           onCollapse={setSchedulePanelCollapsed}
-          datesWithTasks={getAllDatesWithTasks()}
+          taskCountByDate={getTaskCountByDate()}
           isDemo={isDemo}
         />
       )}

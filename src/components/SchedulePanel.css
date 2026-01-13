@@ -91,17 +91,6 @@
   cursor: pointer;
 }
 
-.schedule-date-dot {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
-  background: #1677ff;
-  border-radius: 50%;
-}
-
 .schedule-panel-content {
   flex: 1;
   overflow-y: auto;
