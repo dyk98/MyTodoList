@@ -65,13 +65,13 @@ export default function SchedulePanel({
   const prevDate = getPrevDate()
   const nextDate = getNextDate()
 
-  // 根据任务数量获取背景色（类似 GitHub 贡献图）
+  // 根据任务数量获取背景色（类似 GitHub 贡献图，绿色系）
   const getTaskCountColor = (count: number): string => {
     if (count === 0) return 'transparent'
-    if (count === 1) return '#d1e9ff'  // 浅蓝
-    if (count === 2) return '#91caff'  // 中浅蓝
-    if (count <= 4) return '#4096ff'   // 中蓝
-    return '#0958d9'                    // 深蓝
+    if (count === 1) return '#d3f5d3'  // 浅绿
+    if (count === 2) return '#9be9a8'  // 中浅绿
+    if (count <= 4) return '#40c463'   // 中绿
+    return '#216e39'                    // 深绿
   }
 
   // 日历单元格渲染
