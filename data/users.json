@@ -47,6 +47,12 @@
       "passwordHash": "$2b$10$/XxvnPk09Yh7Ho0MxXuCceWQO1.balDEJwZwCSe9xUNTIrU61lXOW",
       "createdAt": "2026-01-09T16:19:07.429Z",
       "isAdmin": false
+    },
+    {
+      "email": "jacobcchen@tencent.com",
+      "passwordHash": "$2b$10$H00kIfiBljKtcZMy3LjyOutzyx6FBEShhWO.FfMh2JfaBpIh.hgb2",
+      "createdAt": "2026-01-21T04:56:46.903Z",
+      "isAdmin": false
     }
   ]
 }
