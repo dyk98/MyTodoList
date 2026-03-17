@@ -1,5 +1,20 @@
 [
   {
+    "id": "1772433478411",
+    "title": "你好",
+    "messages": [
+      {
+        "role": "user",
+        "content": "你好"
+      },
+      {
+        "role": "assistant",
+        "content": "错误: Error: Command failed: claude -p \"你好\" --allowedTools \"Read,Edit\" --permission-mode acceptEdits"
+      }
+    ],
+    "createdAt": 1772433478411
+  },
+  {
     "id": "1767972601583",
     "title": "你好",
     "messages": [
